@@ -96,14 +96,16 @@ CFIC decouples application-level API lifecycle management from model-serving wor
 
 ## 4. Models in the Architecture
 
-| Model Role | Microservice | Model Family | Target Domain / Language | Container Port |
-| :--- | :--- | :--- | :--- | :--- |
-| **Language ID (LID)** | `model-lid` | ECAPA-TDNN / MMS-LID | Multilingual Spoken LID | `8301` |
-| **English ASR** | `model-asr-en` | AI4Bharat IndicConformer | Indian English (`en`) | `8311` |
-| **Telugu ASR** | `model-asr-te` | AI4Bharat IndicConformer | Telugu (`te`) | `8312` |
-| **Hindi ASR** | `model-asr-hi` | AI4Bharat IndicConformer | Hindi (`hi`) | `8313` |
-| **South Indian Spoof** | `model-vmc-south` | AASIST-L (Fine-tuned) | South Indian Languages (`te`, `ta`, `kn`, `ml`) | `8321` |
-| **Fallback Spoof** | `model-aasist-fallback` | AASIST-L Baseline | English & General Fallback | `8322` |
+| Model Role | Microservice | Model Checkpoint | Target Domain / Language | License | Container Port |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Language ID (LID)** | model-lid | onecxi/open-vakgyata (Wav2Vec2) | 10 Indian & English languages | CC-BY-NC-4.0 | 8301 |
+| **English ASR** | model-asr-en | openai/whisper-base.en | Dedicated English Speech-to-Text | Apache-2.0 | 8311 |
+| **Telugu ASR** | model-asr-te | AI4Bharat IndicConformer | Telugu (	e) | CC-BY-4.0 | 8312 |
+| **Hindi ASR** | model-asr-hi | AI4Bharat IndicConformer | Hindi (hi) | CC-BY-4.0 | 8313 |
+| **South Indian Spoof** | model-vmc-south | AASIST-L (Fine-tuned) | South Indian Languages (	e, 	a, kn, ml) | Academic | 8321 |
+| **Fallback Spoof** | model-aasist-fallback | AASIST-L Baseline | English & General Fallback | Apache-2.0 | 8322 |
+
+> Detailed technical specifications, benchmark results, and licensing information are available in [LID & English ASR Model Documentation](docs/architecture/models-lid-and-english-asr.md).
 
 ---
 

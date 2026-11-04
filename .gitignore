@@ -26,7 +26,7 @@ htmlcov/
 id_rsa*
 
 # Model weights and artifacts (do not commit binary models)
-models/
+/models/
 artifacts/
 weights/*
 !weights/.gitkeep
@@ -46,7 +46,9 @@ weights/*
 # Storage and audio runtime uploads
 storage/
 audio_samples/
-datasets/
+/datasets/
+cloud-inference/llm-evaluation/models/*
+!cloud-inference/llm-evaluation/models/.gitkeep
 *.wav
 *.mp3
 *.ogg
@@ -58,6 +60,9 @@ datasets/
 .DS_Store
 Thumbs.db
 ehthumbs.db
+
+# Scratch and local evaluation caches
+/scratch/
 
 # IDE and Editor files
 .vscode/

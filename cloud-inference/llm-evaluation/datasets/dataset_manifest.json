@@ -1,0 +1,50 @@
+{
+  "dataset_name": "CFIC_VoiceShield_RIAS_Multilingual_Evaluation_Dataset",
+  "random_seed": 42,
+  "total_samples": 131,
+  "split_counts": {
+    "dev": 25,
+    "val": 25,
+    "test": 81
+  },
+  "class_counts_overall": {
+    "LOW": 88,
+    "MEDIUM": 11,
+    "HIGH": 32
+  },
+  "class_counts_test": {
+    "LOW": 54,
+    "MEDIUM": 7,
+    "HIGH": 20
+  },
+  "languages_covered": [
+    "English",
+    "Hindi",
+    "Telugu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Marathi",
+    "Bengali",
+    "Gujarati",
+    "Odia"
+  ],
+  "language_counts_test": {
+    "Odia": 7,
+    "English": 12,
+    "Malayalam": 9,
+    "Bengali": 8,
+    "Kannada": 9,
+    "Telugu": 8,
+    "Tamil": 6,
+    "Hindi": 9,
+    "Gujarati": 9,
+    "Marathi": 4
+  },
+  "provenance_summary": {
+    "authentic_multilingual_audio": 80,
+    "adversarial_benign_probes": 8,
+    "curated_suspicious_corpus": 11,
+    "curated_fraud_corpus": 32
+  }
+}
