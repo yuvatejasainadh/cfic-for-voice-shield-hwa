@@ -15,8 +15,14 @@ class Settings(BaseSettings):
     vmc_south_service_url: str = "http://localhost:8321"
     aasist_fallback_service_url: str = "http://localhost:8322"
 
-    # Timeouts
+    # Timeouts & Policies
     model_timeout_seconds: float = 15.0
+    lid_timeout_seconds: float = 10.0
+    asr_timeout_seconds: float = 15.0
+
+    # Policy controls
+    lid_max_retries: int = 2
+    lid_confidence_threshold: float = 0.60
 
     model_config = SettingsConfigDict(
         env_prefix="INFERENCE_",

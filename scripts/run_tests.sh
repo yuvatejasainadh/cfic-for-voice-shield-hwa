@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
-set -e
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Run the full CFIC test suite across api-gateway, cloud-inference orchestrator, and model microservices
+set -euo pipefail
 
-echo "[1/2] Running API Gateway test suite..."
-cd "$ROOT_DIR/api-gateway"
-python -m pytest -v
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+echo "[1/4] Running API Gateway test suite..."
+cd "${ROOT_DIR}/api-gateway"
+pytest -v
 
 echo ""
-echo "[2/2] Running Cloud Inference Orchestrator test suite..."
-cd "$ROOT_DIR/cloud-inference/orchestrator"
-python -m pytest -v
+echo "[2/4] Running Cloud Inference Orchestrator test suite..."
+cd "${ROOT_DIR}/cloud-inference/orchestrator"
+pytest -v
+
+echo ""
+echo "[3/4] Running Open-Vakgyata LID microservice tests..."
+cd "${ROOT_DIR}/cloud-inference/models/lid"
+pytest -v tests
+
+echo ""
+echo "[4/4] Running English Whisper ASR microservice tests..."
+cd "${ROOT_DIR}/cloud-inference/models/asr/indicconformer/english"
+pytest -v tests
 
 echo ""
 echo "All test suites passed successfully!"

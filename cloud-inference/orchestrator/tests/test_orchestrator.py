@@ -1,5 +1,7 @@
 """Tests for Cloud Inference Orchestrator."""
 
+import io
+from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 from app.main import app
@@ -8,15 +10,15 @@ from app.routing.spoof_selector import spoof_selector
 
 
 def test_language_router_selection():
-    # English
+    # English routes to English ASR
     url, lang = language_router.select_asr_endpoint("en")
     assert lang == "en"
 
-    # Telugu
+    # Telugu routes to Telugu IndicConformer
     url, lang = language_router.select_asr_endpoint("te")
     assert lang == "te"
 
-    # Hindi
+    # Hindi routes to Hindi IndicConformer
     url, lang = language_router.select_asr_endpoint("hi")
     assert lang == "hi"
 
@@ -48,3 +50,136 @@ async def test_orchestrator_health():
         assert "lid" in data["backends"]
         assert "asr_en" in data["backends"]
         assert "vmc_south" in data["backends"]
+
+
+@pytest.mark.asyncio
+async def test_inference_pipeline_english_success():
+    mock_lid = {
+        "status": "success",
+        "language": "en",
+        "raw_label": "en-IN",
+        "confidence": 0.98,
+        "probabilities": {"en": 0.98, "hi": 0.01},
+        "top_k": [{"language": "en", "raw_label": "en-IN", "confidence": 0.98}],
+        "model_id": "onecxi/open-vakgyata",
+        "model_revision": "f2754058e485dfc65cc62589b8d0e21c1d328399",
+        "retries_used": 0,
+        "latency_ms": 120.0,
+    }
+    mock_asr = {
+        "status": "success",
+        "text": "The studies indicate that there is some utility.",
+        "language": "en",
+        "model_id": "openai/whisper-base.en",
+        "model_revision": "911407f4214e0e1d82085af863093ec0b66f9cd6",
+        "latency_ms": 350.0,
+    }
+    mock_spoof = {
+        "status": "success",
+        "prediction": "GENUINE",
+        "score": 0.05,
+        "model_version": "aasist-fallback",
+        "latency_ms": 150.0,
+    }
+
+    with patch("app.api.routes.lid_client.identify", new=AsyncMock(return_value=mock_lid)), \
+         patch("app.api.routes.asr_client.transcribe", new=AsyncMock(return_value=mock_asr)), \
+         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            files = {"file": ("chunk.wav", b"dummy-audio-content", "audio/wav")}
+            data = {"session_id": "sess-123", "chunk_index": "2", "timestamp_start_s": "20.0", "timestamp_end_s": "30.0"}
+            res = await ac.post("/v1/inference", files=files, data=data)
+
+            assert res.status_code == 200
+            res_data = res.json()
+            assert res_data["status"] == "success"
+            assert res_data["session_id"] == "sess-123"
+            assert res_data["chunk_index"] == 2
+            assert res_data["lid"]["language"] == "en"
+            assert res_data["lid"]["confidence"] == 0.98
+            assert res_data["transcription"]["status"] == "success"
+            assert res_data["transcription"]["text"] == "The studies indicate that there is some utility."
+            assert res_data["spoof"]["prediction"] == "GENUINE"
+
+
+@pytest.mark.asyncio
+async def test_inference_pipeline_low_confidence_lid_skips_asr():
+    # Low confidence LID (< 0.60) must result in skipped ASR and inconclusive overall status
+    mock_lid = {
+        "status": "success",
+        "language": "en",
+        "raw_label": "en-IN",
+        "confidence": 0.45,
+        "probabilities": {"en": 0.45, "hi": 0.40},
+        "model_id": "onecxi/open-vakgyata",
+        "retries_used": 2,
+        "latency_ms": 150.0,
+    }
+    mock_spoof = {
+        "status": "success",
+        "prediction": "GENUINE",
+        "score": 0.05,
+        "model_version": "aasist-fallback",
+        "latency_ms": 100.0,
+    }
+
+    mock_asr_call = AsyncMock()
+
+    with patch("app.api.routes.lid_client.identify", new=AsyncMock(return_value=mock_lid)), \
+         patch("app.api.routes.asr_client.transcribe", new=mock_asr_call), \
+         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            files = {"file": ("chunk.wav", b"dummy-audio-content", "audio/wav")}
+            res = await ac.post("/v1/inference", files=files)
+
+            assert res.status_code == 200
+            res_data = res.json()
+            assert res_data["status"] == "inconclusive"
+            assert res_data["lid"]["status"] == "inconclusive"
+            assert res_data["transcription"]["status"] == "skipped"
+            assert res_data["transcription"]["text"] is None
+            # Verify ASR was NOT called
+            mock_asr_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_inference_pipeline_asr_failure_inconclusive():
+    # ASR failure must produce inconclusive overall status
+    mock_lid = {
+        "status": "success",
+        "language": "en",
+        "raw_label": "en-IN",
+        "confidence": 0.95,
+        "model_id": "onecxi/open-vakgyata",
+        "retries_used": 0,
+        "latency_ms": 100.0,
+    }
+    mock_asr = {
+        "status": "error",
+        "text": None,
+        "language": "en",
+        "error": "ASR downstream timeout",
+        "latency_ms": 5000.0,
+    }
+    mock_spoof = {
+        "status": "success",
+        "prediction": "GENUINE",
+        "score": 0.05,
+        "model_version": "aasist-fallback",
+        "latency_ms": 100.0,
+    }
+
+    with patch("app.api.routes.lid_client.identify", new=AsyncMock(return_value=mock_lid)), \
+         patch("app.api.routes.asr_client.transcribe", new=AsyncMock(return_value=mock_asr)), \
+         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            files = {"file": ("chunk.wav", b"dummy-audio-content", "audio/wav")}
+            res = await ac.post("/v1/inference", files=files)
+
+            assert res.status_code == 200
+            res_data = res.json()
+            assert res_data["status"] == "inconclusive"
+            assert res_data["transcription"]["status"] == "error"

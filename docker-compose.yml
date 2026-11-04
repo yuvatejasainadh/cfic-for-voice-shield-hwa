@@ -35,6 +35,8 @@ services:
       - INFERENCE_ASR_HI_SERVICE_URL=http://model-asr-hi:8313
       - INFERENCE_VMC_SOUTH_SERVICE_URL=http://model-vmc-south:8321
       - INFERENCE_AASIST_FALLBACK_SERVICE_URL=http://model-aasist-fallback:8322
+      - INFERENCE_LID_MAX_RETRIES=2
+      - INFERENCE_LID_CONFIDENCE_THRESHOLD=0.60
     depends_on:
       - model-lid
       - model-asr-en
@@ -54,9 +56,12 @@ services:
       dockerfile: models/lid/Dockerfile
     container_name: cfic-model-lid
     environment:
-      - LID_USE_MOCK=${LID_USE_MOCK:-true}
+      - LID_USE_MOCK=${LID_USE_MOCK:-false}
+      - LID_MODEL_ID=onecxi/open-vakgyata
+      - LID_MODEL_REVISION=f2754058e485dfc65cc62589b8d0e21c1d328399
     volumes:
       - ./cloud-inference/models/lid/weights:/app/weights:ro
+      - huggingface-cache:/home/appuser/.cache/huggingface
     networks:
       - cfic-internal-network
 
@@ -66,9 +71,12 @@ services:
       dockerfile: models/asr/indicconformer/english/Dockerfile
     container_name: cfic-model-asr-en
     environment:
-      - ASR_EN_USE_MOCK=${ASR_EN_USE_MOCK:-true}
+      - ASR_EN_USE_MOCK=${ASR_EN_USE_MOCK:-false}
+      - ASR_EN_MODEL_ID=openai/whisper-base.en
+      - ASR_EN_MODEL_REVISION=911407f4214e0e1d82085af863093ec0b66f9cd6
     volumes:
       - ./cloud-inference/models/asr/indicconformer/english/weights:/app/weights:ro
+      - huggingface-cache:/home/appuser/.cache/huggingface
     networks:
       - cfic-internal-network
 
@@ -119,6 +127,10 @@ services:
       - ./cloud-inference/models/aasist-fallback/weights:/app/weights:ro
     networks:
       - cfic-internal-network
+
+volumes:
+  huggingface-cache:
+    driver: local
 
 networks:
   cfic-public-network:

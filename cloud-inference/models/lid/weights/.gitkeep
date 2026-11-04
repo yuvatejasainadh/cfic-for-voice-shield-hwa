@@ -1,0 +1,2 @@
+# Placeholder to maintain weights directory structure in Git.
+# Actual model weights (.nemo, .pt, .onnx) must NOT be committed to version control.

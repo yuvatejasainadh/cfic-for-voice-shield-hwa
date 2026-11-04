@@ -26,7 +26,7 @@ htmlcov/
 id_rsa*
 
 # Model weights and artifacts (do not commit binary models)
-models/
+/models/
 artifacts/
 weights/*
 !weights/.gitkeep
