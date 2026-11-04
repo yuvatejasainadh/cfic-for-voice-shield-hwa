@@ -1,0 +1,129 @@
+{
+  "model_name": "Qwen3.5-2B",
+  "model_path": "cloud-inference\\llm-evaluation\\models\\Qwen3.5-2B-Q4_K_M.gguf",
+  "file_size_mb": 1221.5,
+  "cold_load_seconds": 1.783,
+  "warm_reset_seconds": 0.004,
+  "idle_ram_mb": 1116.94,
+  "peak_ram_mb": 1960.39,
+  "latency_avg_ms": 8116.95,
+  "latency_p50_ms": 8092.51,
+  "latency_p95_ms": 10368.79,
+  "tokens_per_second": 4.89,
+  "cpu_utilization_pct": 88.3,
+  "metrics": {
+    "total_samples": 81,
+    "accuracy": 0.8272,
+    "macro_precision": 0.6949,
+    "macro_recall": 0.7578,
+    "macro_f1": 0.7138,
+    "high_recall": 0.85,
+    "high_precision": 0.7727,
+    "false_low_rate_for_high": 0.0,
+    "invalid_output_rate": 0.0,
+    "per_class": {
+      "LOW": {
+        "precision": 0.9787,
+        "recall": 0.8519,
+        "f1": 0.9109,
+        "support": 54
+      },
+      "MEDIUM": {
+        "precision": 0.3333,
+        "recall": 0.5714,
+        "f1": 0.4211,
+        "support": 7
+      },
+      "HIGH": {
+        "precision": 0.7727,
+        "recall": 0.85,
+        "f1": 0.8095,
+        "support": 20
+      }
+    },
+    "confusion_matrix": {
+      "LOW": {
+        "LOW": 46,
+        "MEDIUM": 1,
+        "HIGH": 0
+      },
+      "MEDIUM": {
+        "LOW": 5,
+        "MEDIUM": 4,
+        "HIGH": 3
+      },
+      "HIGH": {
+        "LOW": 3,
+        "MEDIUM": 2,
+        "HIGH": 17
+      },
+      "INCONCLUSIVE": {
+        "LOW": 0,
+        "MEDIUM": 0,
+        "HIGH": 0
+      }
+    },
+    "per_language": {
+      "Odia": {
+        "total": 7,
+        "accuracy": 0.8571,
+        "high_recall": 1.0,
+        "high_samples": 2
+      },
+      "English": {
+        "total": 12,
+        "accuracy": 0.6667,
+        "high_recall": 0.6,
+        "high_samples": 5
+      },
+      "Malayalam": {
+        "total": 9,
+        "accuracy": 0.7778,
+        "high_recall": 1.0,
+        "high_samples": 2
+      },
+      "Bengali": {
+        "total": 8,
+        "accuracy": 0.875,
+        "high_recall": 1.0,
+        "high_samples": 1
+      },
+      "Kannada": {
+        "total": 9,
+        "accuracy": 0.8889,
+        "high_recall": 1.0,
+        "high_samples": 3
+      },
+      "Telugu": {
+        "total": 8,
+        "accuracy": 0.875,
+        "high_recall": 0.5,
+        "high_samples": 2
+      },
+      "Tamil": {
+        "total": 6,
+        "accuracy": 0.6667,
+        "high_recall": 1.0,
+        "high_samples": 0
+      },
+      "Hindi": {
+        "total": 9,
+        "accuracy": 0.8889,
+        "high_recall": 1.0,
+        "high_samples": 3
+      },
+      "Gujarati": {
+        "total": 9,
+        "accuracy": 0.8889,
+        "high_recall": 1.0,
+        "high_samples": 2
+      },
+      "Marathi": {
+        "total": 4,
+        "accuracy": 1.0,
+        "high_recall": 1.0,
+        "high_samples": 0
+      }
+    }
+  }
+}
