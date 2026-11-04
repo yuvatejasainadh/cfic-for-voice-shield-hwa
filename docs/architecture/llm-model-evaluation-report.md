@@ -7,7 +7,12 @@
 **Feature Branch:** `feat/evaluate-llm-candidates`  
 **Target Architecture:** Decoupled Hybrid (API Gateway + Cloud Inference)  
 **Date:** November 2026  
-**Status:** Evaluation Complete — Recommendation Submitted for Project Owner Approval  
+**Status:** LOCKED — Candidate B (`google/gemma-4-E2B-it` Q4_K_M) APPROVED AND LOCKED as the VoiceShield RIAS LLM. Qwen3.5-2B REJECTED AND REMOVED from deployable assets.
+
+---
+
+> [!NOTE]
+> **Historical Decision Record Notice:** Qwen3.5-2B has been completely removed from active configurations, runtime adapters, download paths, and deployable assets. All Qwen benchmark figures below are preserved strictly as non-deployable historical evidence documenting the architectural justification for selecting Gemma 4 E2B IT.
 
 ---
 
@@ -338,31 +343,49 @@ Using the seven project-specified priority criteria:
 
 ---
 
-## 14. Recommendation for Project Owner Approval
+## 14. Locked Model Selection Record
 
-### Formal Recommendation: **SELECT CANDIDATE B (`google/gemma-4-E2B-it` Q4_K_M)**
+### Final Decision: **LOCKED — Gemma 4 E2B IT (`google/gemma-4-E2B-it` Q4_K_M)**
 
-Based on empirical evidence across 81 held-out multilingual test transcripts and 10 robustness probes:
-- Gemma-4-E2B-it wins on **5 out of 7 criteria**, including the top 3 safety-critical priorities.
-- It delivers **100% HIGH-risk fraud recall**, **95.06% accuracy**, **62% faster P50 latency (3.06s)**, and **2.34x higher generation throughput (11.45 tok/s)**.
-- Evidence is **conclusive and sufficient** to recommend locking Gemma-4-E2B-it for the VoiceShield MVP production service.
+Based on empirical evidence across 81 held-out multilingual test transcripts and 10 robustness probes, `google/gemma-4-E2B-it` (Q4_K_M) has been formally locked as the conversational risk assessment engine for RIAS.
+
+#### Locked Model Specification & Benchmark Summary
+
+| Metric / Parameter | Gemma 4 E2B IT Q4_K_M Specification |
+|---|---:|
+| **Model ID** | `google/gemma-4-E2B-it` |
+| **GGUF Source** | `unsloth/gemma-4-E2B-it-GGUF` |
+| **Quantization** | `Q4_K_M` |
+| **Runtime Engine** | `llama.cpp` (via `llama-cpp-python`) |
+| **Execution Mode** | CPU-first (`n_threads=4`) |
+| **Model File Size** | 2,962.82 MB (~2.96 GB) |
+| **Allowed Output Labels** | `LOW`, `MEDIUM`, `HIGH` |
+| **Overall Accuracy** | **95.06%** |
+| **Macro F1 Score** | **0.8873** |
+| **HIGH-Risk Recall** | **100.00%** (20 / 20) |
+| **HIGH-Risk Precision** | **95.24%** |
+| **Invalid Output Rate** | **0.00%** |
+| **Average Latency** | **3,249.5 ms** |
+| **P95 Latency** | **4,601.0 ms** |
+| **Peak Process RAM** | **2,793.9 MB** |
+| **Generation Throughput** | **11.45 tokens/s** |
 
 > [!IMPORTANT]
-> In accordance with project instructions, neither model is locked automatically. This report and empirical data are submitted for formal human project-owner approval before proceeding with production containerization.
+> **Validation Caveat:** These metrics represent empirical performance on the reported 81-sample held-out evaluation dataset under controlled CPU conditions, and do not constitute universal production guarantees. Ground-truth label provenance, domain transfer resilience, and independent human annotation verification must be verified before treating these figures as definitive evidence of real-world generalization.
 
 ---
 
 ## 15. Known Limitations & Mitigations
 
-1. **Medium-Class Sensitivity:** Both models occasionally classify aggressive telemarketing as HIGH or LOW rather than MEDIUM. *Mitigation:* In TCED policy, only HIGH triggers immediate suspension; MEDIUM is fused with acoustic spoof evidence, preventing false alarms.
+1. **Medium-Class Sensitivity:** Aggressive telemarketing calls may occasionally border on HIGH or LOW. *Mitigation:* Under the TCED decision fusion policy, only HIGH triggers immediate suspension; MEDIUM is fused with acoustic spoof evidence, preventing premature false alarms.
 2. **Long Audio Transcripts:** Transcripts exceeding 500 words require sliding window chunking to maintain sub-5s latency on CPU.
-3. **Language Identification Coupling:** Both models rely on accurate upstream ASR text. If upstream ASR produces phonetic gibberish, the adapter gracefully falls back to `INCONCLUSIVE`.
+3. **Language Identification Coupling:** The LLM relies on upstream ASR text. If upstream ASR produces phonetic gibberish or acoustic silence, the adapter gracefully falls back to `INCONCLUSIVE`.
 
 ---
 
 ## 16. Reproducibility Instructions
 
-To reproduce the benchmark results on any CPU machine:
+To reproduce the benchmark results for the locked model on any CPU machine:
 
 ```powershell
 # 1. Activate project virtual environment
@@ -371,29 +394,24 @@ To reproduce the benchmark results on any CPU machine:
 # 2. Verify dependencies
 pip install llama-cpp-python psutil requests gguf pytest
 
-# 3. Download verified GGUF weights
-python cloud-inference/llm-evaluation/scripts/download_model.py unsloth/Qwen3.5-2B-GGUF Qwen3.5-2B-Q4_K_M.gguf
+# 3. Download verified locked Gemma GGUF weights
 python cloud-inference/llm-evaluation/scripts/download_model.py unsloth/gemma-4-E2B-it-GGUF gemma-4-E2B-it-Q4_K_M.gguf
 
 # 4. Prepare dataset splits
 python cloud-inference/llm-evaluation/scripts/prepare_dataset.py
 
-# 5. Execute robustness test suites
-python cloud-inference/llm-evaluation/tests/test_robustness.py Qwen3.5-2B cloud-inference/llm-evaluation/models/Qwen3.5-2B-Q4_K_M.gguf
+# 5. Execute robustness test suite
 python cloud-inference/llm-evaluation/tests/test_robustness.py Gemma-4-E2B-it cloud-inference/llm-evaluation/models/gemma-4-E2B-it-Q4_K_M.gguf
 
-# 6. Execute held-out test benchmarks
-python cloud-inference/llm-evaluation/scripts/evaluate_candidate.py Qwen3.5-2B cloud-inference/llm-evaluation/models/Qwen3.5-2B-Q4_K_M.gguf cloud-inference/llm-evaluation/datasets/rias_dataset_test.json
+# 6. Execute held-out test benchmark
 python cloud-inference/llm-evaluation/scripts/evaluate_candidate.py Gemma-4-E2B-it cloud-inference/llm-evaluation/models/gemma-4-E2B-it-Q4_K_M.gguf cloud-inference/llm-evaluation/datasets/rias_dataset_test.json
 
 # 7. Run adapter unit tests
 pytest cloud-inference/llm-evaluation/tests/test_rias_adapter.py -v
 ```
 
-Machine-readable JSON and CSV results are archived at:
-- `cloud-inference/llm-evaluation/results/comparison_summary.json`
-- `cloud-inference/llm-evaluation/results/qwen3_5_2b_results.json`
-- `cloud-inference/llm-evaluation/results/qwen3_5_2b_samples.csv`
+Machine-readable evaluation artifacts are archived at:
+- `cloud-inference/llm-evaluation/results/comparison_summary.json` (Historical decision evidence)
 - `cloud-inference/llm-evaluation/results/gemma_4_e2b_it_results.json`
 - `cloud-inference/llm-evaluation/results/gemma_4_e2b_it_samples.csv`
 

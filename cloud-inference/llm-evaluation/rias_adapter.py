@@ -46,8 +46,8 @@ class RIASAdapter:
     def __init__(
         self,
         model_path: str | Path,
-        model_id: str = "Qwen/Qwen3.5-2B",
-        model_revision: Optional[str] = "15852e8c16360a2fea060d615a32b45270f8a8fc",
+        model_id: str = "google/gemma-4-E2B-it",
+        model_revision: Optional[str] = "4adf15748de9e1a0097b6274cee9c15836c41c37",
         n_threads: int = 4,
         n_ctx: int = 2048
     ):

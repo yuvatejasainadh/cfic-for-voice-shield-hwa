@@ -1,4 +1,10 @@
-"""Master evaluation runner comparing Candidate A (Qwen3.5-2B) and Candidate B (Gemma-4-E2B-it)."""
+"""Evaluation runner for the selected RIAS LLM (Gemma-4-E2B-it).
+
+Note: Historical candidate comparison data between Qwen3.5-2B (rejected) and Gemma 4 E2B IT
+(selected) is archived in docs/architecture/llm-model-evaluation-report.md and
+cloud-inference/llm-evaluation/results/comparison_summary.json for decision provenance.
+Active runtime execution is strictly locked to Gemma-4-E2B-it.
+"""
 
 import os
 import sys
@@ -21,89 +27,56 @@ DATASETS_DIR = EVAL_DIR / "datasets"
 RESULTS_DIR = EVAL_DIR / "results"
 TEST_DATASET_PATH = DATASETS_DIR / "rias_dataset_test.json"
 
-CANDIDATES = [
-    {
-        "name": "Qwen3.5-2B",
-        "path": MODELS_DIR / "Qwen3.5-2B-Q4_K_M.gguf",
-        "repo": "Qwen/Qwen3.5-2B",
-        "base_commit": "15852e8c16360a2fea060d615a32b45270f8a8fc",
-        "gguf_repo": "unsloth/Qwen3.5-2B-GGUF",
-        "gguf_commit": "f6d5376be1edb4d416d56da11e5397a961aca8ae",
-        "quantization": "Q4_K_M",
-        "architecture": "Qwen3_5ForConditionalGeneration",
-        "license": "Apache-2.0"
-    },
-    {
-        "name": "Gemma-4-E2B-it",
-        "path": MODELS_DIR / "gemma-4-E2B-it-Q4_K_M.gguf",
-        "repo": "google/gemma-4-E2B-it",
-        "base_commit": "4adf15748de9e1a0097b6274cee9c15836c41c37",
-        "gguf_repo": "unsloth/gemma-4-E2B-it-GGUF",
-        "gguf_commit": "0314792d7f1f7e229411f620751375812bb9faf2",
-        "quantization": "Q4_K_M",
-        "architecture": "Gemma4ForConditionalGeneration",
-        "license": "Apache-2.0"
-    }
-]
+SELECTED_MODEL = {
+    "name": "Gemma-4-E2B-it",
+    "status": "LOCKED_RIAS_LLM",
+    "path": MODELS_DIR / "gemma-4-E2B-it-Q4_K_M.gguf",
+    "repo": "google/gemma-4-E2B-it",
+    "base_commit": "4adf15748de9e1a0097b6274cee9c15836c41c37",
+    "gguf_repo": "unsloth/gemma-4-E2B-it-GGUF",
+    "gguf_commit": "0314792d7f1f7e229411f620751375812bb9faf2",
+    "quantization": "Q4_K_M",
+    "architecture": "Gemma4ForConditionalGeneration",
+    "license": "Apache-2.0"
+}
 
 
-def run_full_comparison():
+def run_evaluation():
     print("=================================================================")
-    print("CFIC × VoiceShield — RIAS LLM Candidate Comparative Benchmark")
+    print("CFIC × VoiceShield — Locked RIAS LLM Benchmark (Gemma-4-E2B-it)")
     print("=================================================================")
     print(f"Dataset: {TEST_DATASET_PATH}")
     print(f"Results Directory: {RESULTS_DIR}")
 
-    comparison_results = {}
+    m_name = SELECTED_MODEL["name"]
+    m_path = SELECTED_MODEL["path"]
 
-    for cand in CANDIDATES:
-        c_name = cand["name"]
-        c_path = cand["path"]
+    if not m_path.exists():
+        raise FileNotFoundError(f"Missing locked model file: {m_path}")
 
-        if not c_path.exists():
-            raise FileNotFoundError(f"Missing model file: {c_path}")
+    # 1. Classification & Hardware Benchmark
+    bench_summary = evaluate_model(
+        model_name=m_name,
+        model_path=m_path,
+        dataset_path=TEST_DATASET_PATH,
+        output_dir=RESULTS_DIR,
+        n_threads=4,
+        temperature=0.0,
+        max_tokens=64
+    )
 
-        # 1. Classification & Hardware Benchmark (Sequentially)
-        bench_summary = evaluate_model(
-            model_name=c_name,
-            model_path=c_path,
-            dataset_path=TEST_DATASET_PATH,
-            output_dir=RESULTS_DIR,
-            n_threads=4,
-            temperature=0.0,
-            max_tokens=64
-        )
+    time.sleep(2)
 
-        # Allow cooling / system settling
-        time.sleep(2)
-
-        # 2. Robustness Suite
-        rob_summary = run_robustness_tests(
-            model_name=c_name,
-            model_path=c_path
-        )
-
-        comparison_results[c_name] = {
-            "metadata": cand,
-            "benchmark": bench_summary,
-            "robustness": rob_summary
-        }
-
-        # Settle before next candidate
-        time.sleep(3)
-
-    # Save consolidated comparison JSON
-    out_comparison_path = RESULTS_DIR / "comparison_summary.json"
-    with open(out_comparison_path, "w", encoding="utf-8") as f:
-        # Convert Path objects to string
-        clean_json = json.loads(json.dumps(comparison_results, default=str))
-        json.dump(clean_json, f, indent=2, ensure_ascii=False)
+    # 2. Robustness Suite
+    rob_summary = run_robustness_tests(
+        model_name=m_name,
+        model_path=m_path
+    )
 
     print("\n=================================================================")
-    print("BENCHMARK COMPLETED SUCCESSFULLY!")
-    print(f"Consolidated results saved to: {out_comparison_path}")
+    print("BENCHMARK COMPLETED SUCCESSFULLY FOR GEMMA-4-E2B-IT!")
     print("=================================================================")
 
 
 if __name__ == "__main__":
-    run_full_comparison()
+    run_evaluation()
