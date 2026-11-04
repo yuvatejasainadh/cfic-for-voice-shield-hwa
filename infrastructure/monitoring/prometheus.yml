@@ -1,0 +1,16 @@
+# CFIC Prometheus Monitoring Configuration
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "cfic-api-gateway"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["api-gateway:8000"]
+
+  - job_name: "cloud-inference-orchestrator"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["cloud-inference-orchestrator:8200"]
