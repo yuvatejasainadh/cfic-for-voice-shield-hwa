@@ -1,49 +1,127 @@
 services:
-  cfic-api:
+  # ============================================================================
+  # 1. API Gateway (Public Edge Entry Point)
+  # ============================================================================
+  api-gateway:
     build:
-      context: .
+      context: ./api-gateway
       dockerfile: Dockerfile
-    container_name: cfic-api
+    container_name: cfic-api-gateway
     ports:
       - "8000:8000"
-    env_file:
-      - .env
     environment:
       - CFIC_ENV=development
-      - CFIC_PELLA_BASE_URL=http://pella-service:8101
-      - CFIC_TRANSCRIPTION_BASE_URL=http://transcription-service:8102
+      - CFIC_API_KEY=${CFIC_API_KEY:-replace-me-for-local-testing}
+      - CFIC_CLOUD_INFERENCE_URL=http://cloud-inference-orchestrator:8200
+      - CFIC_REQUEST_TIMEOUT_SECONDS=30.0
     depends_on:
-      - pella-service
-      - transcription-service
+      - cloud-inference-orchestrator
     networks:
-      - cfic-network
+      - cfic-public-network
+      - cfic-internal-network
 
-  pella-service:
+  # ============================================================================
+  # 2. Cloud Inference Orchestrator (Internal Model Coordinator)
+  # ============================================================================
+  cloud-inference-orchestrator:
     build:
-      context: .
-      dockerfile: services/pella/Dockerfile
-    container_name: cfic-pella-service
-    ports:
-      - "8101:8101"
+      context: ./cloud-inference/orchestrator
+      dockerfile: Dockerfile
+    container_name: cfic-inference-orchestrator
     environment:
-      - PELLA_USE_MOCK=true
-      - PELLA_MODEL_VERSION=pellav2-scaffold-v0.1
+      - INFERENCE_LID_SERVICE_URL=http://model-lid:8301
+      - INFERENCE_ASR_EN_SERVICE_URL=http://model-asr-en:8311
+      - INFERENCE_ASR_TE_SERVICE_URL=http://model-asr-te:8312
+      - INFERENCE_ASR_HI_SERVICE_URL=http://model-asr-hi:8313
+      - INFERENCE_VMC_SOUTH_SERVICE_URL=http://model-vmc-south:8321
+      - INFERENCE_AASIST_FALLBACK_SERVICE_URL=http://model-aasist-fallback:8322
+    depends_on:
+      - model-lid
+      - model-asr-en
+      - model-asr-te
+      - model-asr-hi
+      - model-vmc-south
+      - model-aasist-fallback
     networks:
-      - cfic-network
+      - cfic-internal-network
 
-  transcription-service:
+  # ============================================================================
+  # 3. Model Services (Isolated Private Microservices)
+  # ============================================================================
+  model-lid:
     build:
-      context: .
-      dockerfile: services/transcription/Dockerfile
-    container_name: cfic-transcription-service
-    ports:
-      - "8102:8102"
+      context: ./cloud-inference
+      dockerfile: models/lid/Dockerfile
+    container_name: cfic-model-lid
     environment:
-      - TRANSCRIPTION_USE_MOCK=true
-      - TRANSCRIPTION_MODEL_VERSION=whisper-indic-mock-v0.1
+      - LID_USE_MOCK=${LID_USE_MOCK:-true}
+    volumes:
+      - ./cloud-inference/models/lid/weights:/app/weights:ro
     networks:
-      - cfic-network
+      - cfic-internal-network
+
+  model-asr-en:
+    build:
+      context: ./cloud-inference
+      dockerfile: models/asr/indicconformer/english/Dockerfile
+    container_name: cfic-model-asr-en
+    environment:
+      - ASR_EN_USE_MOCK=${ASR_EN_USE_MOCK:-true}
+    volumes:
+      - ./cloud-inference/models/asr/indicconformer/english/weights:/app/weights:ro
+    networks:
+      - cfic-internal-network
+
+  model-asr-te:
+    build:
+      context: ./cloud-inference
+      dockerfile: models/asr/indicconformer/telugu/Dockerfile
+    container_name: cfic-model-asr-te
+    environment:
+      - ASR_TE_USE_MOCK=${ASR_TE_USE_MOCK:-true}
+    volumes:
+      - ./cloud-inference/models/asr/indicconformer/telugu/weights:/app/weights:ro
+    networks:
+      - cfic-internal-network
+
+  model-asr-hi:
+    build:
+      context: ./cloud-inference
+      dockerfile: models/asr/indicconformer/hindi/Dockerfile
+    container_name: cfic-model-asr-hi
+    environment:
+      - ASR_HI_USE_MOCK=${ASR_HI_USE_MOCK:-true}
+    volumes:
+      - ./cloud-inference/models/asr/indicconformer/hindi/weights:/app/weights:ro
+    networks:
+      - cfic-internal-network
+
+  model-vmc-south:
+    build:
+      context: ./cloud-inference
+      dockerfile: models/vmc-south/Dockerfile
+    container_name: cfic-model-vmc-south
+    environment:
+      - VMC_SOUTH_USE_MOCK=${VMC_SOUTH_USE_MOCK:-true}
+    volumes:
+      - ./cloud-inference/models/vmc-south/weights:/app/weights:ro
+    networks:
+      - cfic-internal-network
+
+  model-aasist-fallback:
+    build:
+      context: ./cloud-inference
+      dockerfile: models/aasist-fallback/Dockerfile
+    container_name: cfic-model-aasist-fallback
+    environment:
+      - AASIST_USE_MOCK=${AASIST_USE_MOCK:-true}
+    volumes:
+      - ./cloud-inference/models/aasist-fallback/weights:/app/weights:ro
+    networks:
+      - cfic-internal-network
 
 networks:
-  cfic-network:
+  cfic-public-network:
+    driver: bridge
+  cfic-internal-network:
     driver: bridge

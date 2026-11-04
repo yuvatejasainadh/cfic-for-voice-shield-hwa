@@ -1,5 +1,6 @@
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 env/
 ENV/
@@ -27,17 +28,23 @@ id_rsa*
 # Model weights and artifacts (do not commit binary models)
 models/
 artifacts/
-weights/
+weights/*
+!weights/.gitkeep
+**/weights/*
+!**/weights/.gitkeep
 *.pt
 *.pth
 *.onnx
 *.bin
 *.safetensors
+*.nemo
 *.gguf
 *.tflite
 *.joblib
+*.ckpt
 
-# Audio files and datasets
+# Storage and audio runtime uploads
+storage/
 audio_samples/
 datasets/
 *.wav
