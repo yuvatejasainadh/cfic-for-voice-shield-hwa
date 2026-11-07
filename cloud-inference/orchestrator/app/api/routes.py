@@ -1,6 +1,7 @@
 """API routes for Cloud Inference Orchestrator."""
 
 import asyncio
+import logging
 import time
 from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
@@ -20,6 +21,7 @@ from app.services.lid_client import lid_client
 from app.services.rias_client import rias_client
 from app.services.spoof_client import spoof_client
 
+logger = logging.getLogger("orchestrator_routes")
 router = APIRouter()
 
 
@@ -122,73 +124,92 @@ async def run_inference(
     else:
         # Route to exact language-specific ASR backend
         asr_endpoint, normalized_lang = language_router.select_asr_endpoint(detected_lang)
-        asr_task = asyncio.create_task(
-            asr_client.transcribe(asr_endpoint, content, filename=filename, content_type=content_type)
-        )
-
-        asr_raw, spoof_raw = await asyncio.gather(asr_task, spoof_task, return_exceptions=True)
-
-        if isinstance(asr_raw, Exception) or asr_raw.get("status") == "error":
+        if not asr_endpoint:
+            logger.warning(f"Unsupported language '{detected_lang}' detected; skipping ASR and RIAS.")
             asr_result = ASRResult(
-                status="error",
+                status="unsupported_language",
                 text=None,
-                language=normalized_lang,
-                model_id=asr_raw.get("model_id") if isinstance(asr_raw, dict) else None,
-                model_revision=asr_raw.get("model_revision") if isinstance(asr_raw, dict) else None,
-                latency_ms=asr_raw.get("latency_ms", 0.0) if isinstance(asr_raw, dict) else 0.0,
+                language=detected_lang,
+                model_id=None,
+                model_revision=None,
+                error=f"Language '{detected_lang}' is not supported by ASR services",
+                latency_ms=0.0,
             )
             rias_result = RIASResult(
                 status="skipped",
                 risk_level="INCONCLUSIVE",
-                failure_reason="ASR failed; RIAS skipped",
+                failure_reason=f"Unsupported language: {detected_lang}; ASR and RIAS skipped",
                 latency_ms=0.0,
             )
-            # ASR failure produces INCONCLUSIVE overall
             pipeline_status = "inconclusive"
+            spoof_raw = await spoof_task
         else:
-            asr_result = ASRResult(
-                status=asr_raw.get("status", "success"),
-                text=asr_raw.get("text"),
-                language=asr_raw.get("language", normalized_lang),
-                model_id=asr_raw.get("model_id", "openai/whisper-base.en" if normalized_lang == "en" else "indicconformer"),
-                model_revision=asr_raw.get("model_revision"),
-                latency_ms=asr_raw.get("latency_ms", 0.0),
+            asr_task = asyncio.create_task(
+                asr_client.transcribe(asr_endpoint, content, filename=filename, content_type=content_type)
             )
 
-            # Step 4: RIAS Semantic Risk Analysis via Gemma 4 E2B IT
-            transcript_text = asr_result.text
-            if not transcript_text or not transcript_text.strip():
+            asr_raw, spoof_raw = await asyncio.gather(asr_task, spoof_task, return_exceptions=True)
+
+            if isinstance(asr_raw, Exception) or asr_raw.get("status") == "error":
+                asr_result = ASRResult(
+                    status="error",
+                    text=None,
+                    language=normalized_lang,
+                    model_id=asr_raw.get("model_id") if isinstance(asr_raw, dict) else None,
+                    model_revision=asr_raw.get("model_revision") if isinstance(asr_raw, dict) else None,
+                    latency_ms=asr_raw.get("latency_ms", 0.0) if isinstance(asr_raw, dict) else 0.0,
+                )
                 rias_result = RIASResult(
                     status="skipped",
                     risk_level="INCONCLUSIVE",
-                    failure_reason="Empty transcription text",
+                    failure_reason="ASR failed; RIAS skipped",
                     latency_ms=0.0,
                 )
-                pipeline_status = "success"
+                pipeline_status = "inconclusive"
             else:
-                rias_raw = await rias_client.assess(
-                    transcript=transcript_text,
-                    language=normalized_lang,
-                    session_id=session_id,
-                    chunk_index=chunk_index or 0,
-                )
-                raw_status = rias_raw.get("status", "error").lower()
-                raw_risk = rias_raw.get("risk_level", "INCONCLUSIVE").upper()
-                raw_reason = rias_raw.get("failure_reason")
-
-                rias_result = RIASResult(
-                    status=raw_status,
-                    risk_level=raw_risk,
-                    failure_reason=raw_reason,
-                    model_id=rias_raw.get("model_id", "google/gemma-4-E2B-it"),
-                    model_revision=rias_raw.get("model_revision", "4adf15748de9e1a0097b6274cee9c15836c41c37"),
-                    latency_ms=rias_raw.get("latency_ms", 0.0),
+                asr_result = ASRResult(
+                    status=asr_raw.get("status", "success"),
+                    text=asr_raw.get("text"),
+                    language=asr_raw.get("language", normalized_lang),
+                    model_id=asr_raw.get("model_id", "openai/whisper-base.en" if normalized_lang == "en" else "indicconformer"),
+                    model_revision=asr_raw.get("model_revision"),
+                    latency_ms=asr_raw.get("latency_ms", 0.0),
                 )
 
-                if raw_status != "success" or raw_risk == "INCONCLUSIVE":
-                    pipeline_status = "inconclusive"
-                else:
+                # Step 4: RIAS Semantic Risk Analysis via Gemma 4 E2B IT
+                transcript_text = asr_result.text
+                if not transcript_text or not transcript_text.strip():
+                    rias_result = RIASResult(
+                        status="skipped",
+                        risk_level="INCONCLUSIVE",
+                        failure_reason="Empty transcription text",
+                        latency_ms=0.0,
+                    )
                     pipeline_status = "success"
+                else:
+                    rias_raw = await rias_client.assess(
+                        transcript=transcript_text,
+                        language=normalized_lang,
+                        session_id=session_id,
+                        chunk_index=chunk_index or 0,
+                    )
+                    raw_status = rias_raw.get("status", "error").lower()
+                    raw_risk = rias_raw.get("risk_level", "INCONCLUSIVE").upper()
+                    raw_reason = rias_raw.get("failure_reason")
+
+                    rias_result = RIASResult(
+                        status=raw_status,
+                        risk_level=raw_risk,
+                        failure_reason=raw_reason,
+                        model_id=rias_raw.get("model_id", "google/gemma-4-E2B-it"),
+                        model_revision=rias_raw.get("model_revision", "4adf15748de9e1a0097b6274cee9c15836c41c37"),
+                        latency_ms=rias_raw.get("latency_ms", 0.0),
+                    )
+
+                    if raw_status != "success" or raw_risk == "INCONCLUSIVE":
+                        pipeline_status = "inconclusive"
+                    else:
+                        pipeline_status = "success"
 
     # Normalize Spoof result
     if isinstance(spoof_raw, Exception) or (isinstance(spoof_raw, dict) and spoof_raw.get("status") == "error"):
