@@ -35,6 +35,8 @@ services:
       - INFERENCE_ASR_HI_SERVICE_URL=http://model-asr-hi:8313
       - INFERENCE_VMC_SOUTH_SERVICE_URL=http://model-vmc-south:8321
       - INFERENCE_AASIST_FALLBACK_SERVICE_URL=http://model-aasist-fallback:8322
+      - INFERENCE_RIAS_SERVICE_URL=http://model-rias-gemma:8331
+      - INFERENCE_RIAS_TIMEOUT_SECONDS=30.0
       - INFERENCE_LID_MAX_RETRIES=2
       - INFERENCE_LID_CONFIDENCE_THRESHOLD=0.60
     depends_on:
@@ -44,6 +46,7 @@ services:
       - model-asr-hi
       - model-vmc-south
       - model-aasist-fallback
+      - model-rias-gemma
     networks:
       - cfic-internal-network
 
@@ -125,6 +128,33 @@ services:
       - AASIST_USE_MOCK=${AASIST_USE_MOCK:-true}
     volumes:
       - ./cloud-inference/models/aasist-fallback/weights:/app/weights:ro
+    networks:
+      - cfic-internal-network
+
+  model-rias-gemma:
+    build:
+      context: ./cloud-inference
+      dockerfile: models/rias/Dockerfile
+    container_name: cfic-model-rias-gemma
+    environment:
+      - RIAS_USE_MOCK=${RIAS_USE_MOCK:-false}
+      - GEMMA_MODEL_PATH=/app/weights/gemma-4-E2B-it-Q4_K_M.gguf
+      - RIAS_MODEL_ID=google/gemma-4-E2B-it
+      - RIAS_MODEL_REVISION=4adf15748de9e1a0097b6274cee9c15836c41c37
+      - RIAS_MODEL_SHA256=740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8
+      - RIAS_N_THREADS=4
+      - RIAS_N_CTX=2048
+      - RIAS_MAX_TOKENS=16
+      - RIAS_TIMEOUT_SECONDS=30.0
+      - RIAS_QUEUE_TIMEOUT_SECONDS=10.0
+      - RIAS_MAX_CONCURRENT_REQUESTS=2
+      - RIAS_MAX_QUEUE_SIZE=10
+    volumes:
+      - ./cloud-inference/models/rias/weights:/app/weights:ro
+    deploy:
+      resources:
+        limits:
+          memory: 6G
     networks:
       - cfic-internal-network
 

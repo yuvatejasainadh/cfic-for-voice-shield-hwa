@@ -46,6 +46,16 @@ class SpoofResponse(BaseModel):
     latency_ms: float = Field(default=0.0)
 
 
+class RIASResponse(BaseModel):
+    """Normalized response from Gemma RIAS LLM inference service."""
+    status: str = Field(default="success", description="'success', 'skipped', 'inconclusive', or 'error'")
+    risk_level: str = Field(default="INCONCLUSIVE", description="'LOW', 'MEDIUM', 'HIGH', or 'INCONCLUSIVE'")
+    failure_reason: Optional[str] = Field(default=None)
+    model_id: str = Field(default="google/gemma-4-E2B-it")
+    model_revision: Optional[str] = Field(default="4adf15748de9e1a0097b6274cee9c15836c41c37")
+    latency_ms: float = Field(default=0.0)
+
+
 class InferencePipelineResponse(BaseModel):
     """Unified response from Cloud Inference Orchestrator to API Gateway."""
     status: str = Field(default="success", description="'success', 'inconclusive', or 'error'")
@@ -56,4 +66,5 @@ class InferencePipelineResponse(BaseModel):
     lid: LIDResponse
     transcription: ASRResponse
     spoof: SpoofResponse
+    rias: Optional[RIASResponse] = Field(default=None)
     latency_ms: float = Field(default=0.0)

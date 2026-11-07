@@ -40,6 +40,15 @@ class SpoofResult(BaseModel):
     latency_ms: float = Field(default=0.0)
 
 
+class RIASResult(BaseModel):
+    status: str = Field(default="success", description="'success', 'skipped', 'inconclusive', or 'error'")
+    risk_level: str = Field(default="INCONCLUSIVE", description="'LOW', 'MEDIUM', 'HIGH', or 'INCONCLUSIVE'")
+    failure_reason: Optional[str] = Field(default=None, description="Reason if risk is inconclusive or skipped")
+    model_id: Optional[str] = Field(default="google/gemma-4-E2B-it")
+    model_revision: Optional[str] = Field(default="4adf15748de9e1a0097b6274cee9c15836c41c37")
+    latency_ms: float = Field(default=0.0)
+
+
 class InferenceResponse(BaseModel):
     status: str = Field(default="success", description="'success', 'inconclusive', or 'error'")
     session_id: Optional[str] = Field(default=None, description="Client session identifier")
@@ -49,11 +58,12 @@ class InferenceResponse(BaseModel):
     lid: LIDResult
     transcription: ASRResult
     spoof: SpoofResult
+    rias: Optional[RIASResult] = Field(default=None, description="RIAS conversational semantic risk assessment")
     latency_ms: float = Field(default=0.0)
 
 
 class HealthResponse(BaseModel):
     status: str = Field(default="ok")
-    service: str = Field(default="cloud-inference-orchestrator")
-    version: str = Field(default="0.2.0")
+    service: str = "cloud-inference-orchestrator"
+    version: str = "0.2.0"
     backends: Dict[str, str] = Field(default_factory=dict)

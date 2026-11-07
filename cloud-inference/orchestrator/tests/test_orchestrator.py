@@ -50,6 +50,7 @@ async def test_orchestrator_health():
         assert "lid" in data["backends"]
         assert "asr_en" in data["backends"]
         assert "vmc_south" in data["backends"]
+        assert "rias" in data["backends"]
 
 
 @pytest.mark.asyncio
@@ -81,10 +82,19 @@ async def test_inference_pipeline_english_success():
         "model_version": "aasist-fallback",
         "latency_ms": 150.0,
     }
+    mock_rias = {
+        "status": "success",
+        "risk_level": "LOW",
+        "failure_reason": None,
+        "model_id": "google/gemma-4-E2B-it",
+        "model_revision": "4adf15748de9e1a0097b6274cee9c15836c41c37",
+        "latency_ms": 210.0,
+    }
 
     with patch("app.api.routes.lid_client.identify", new=AsyncMock(return_value=mock_lid)), \
          patch("app.api.routes.asr_client.transcribe", new=AsyncMock(return_value=mock_asr)), \
-         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)):
+         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)), \
+         patch("app.api.routes.rias_client.assess", new=AsyncMock(return_value=mock_rias)):
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             files = {"file": ("chunk.wav", b"dummy-audio-content", "audio/wav")}
@@ -101,11 +111,63 @@ async def test_inference_pipeline_english_success():
             assert res_data["transcription"]["status"] == "success"
             assert res_data["transcription"]["text"] == "The studies indicate that there is some utility."
             assert res_data["spoof"]["prediction"] == "GENUINE"
+            assert res_data["rias"] is not None
+            assert res_data["rias"]["status"] == "success"
+            assert res_data["rias"]["risk_level"] == "LOW"
+
+
+@pytest.mark.asyncio
+async def test_inference_pipeline_high_risk_rias():
+    mock_lid = {
+        "status": "success",
+        "language": "en",
+        "raw_label": "en-IN",
+        "confidence": 0.95,
+        "model_id": "onecxi/open-vakgyata",
+        "retries_used": 0,
+        "latency_ms": 100.0,
+    }
+    mock_asr = {
+        "status": "success",
+        "text": "This is police headquarters. You are under digital arrest. Transfer funds now.",
+        "language": "en",
+        "model_id": "openai/whisper-base.en",
+        "latency_ms": 300.0,
+    }
+    mock_spoof = {
+        "status": "success",
+        "prediction": "GENUINE",
+        "score": 0.02,
+        "model_version": "aasist-fallback",
+        "latency_ms": 120.0,
+    }
+    mock_rias = {
+        "status": "success",
+        "risk_level": "HIGH",
+        "failure_reason": None,
+        "model_id": "google/gemma-4-E2B-it",
+        "model_revision": "4adf15748de9e1a0097b6274cee9c15836c41c37",
+        "latency_ms": 180.0,
+    }
+
+    with patch("app.api.routes.lid_client.identify", new=AsyncMock(return_value=mock_lid)), \
+         patch("app.api.routes.asr_client.transcribe", new=AsyncMock(return_value=mock_asr)), \
+         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)), \
+         patch("app.api.routes.rias_client.assess", new=AsyncMock(return_value=mock_rias)):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            files = {"file": ("chunk.wav", b"dummy-audio-content", "audio/wav")}
+            res = await ac.post("/v1/inference", files=files)
+
+            assert res.status_code == 200
+            res_data = res.json()
+            assert res_data["status"] == "success"
+            assert res_data["rias"]["status"] == "success"
+            assert res_data["rias"]["risk_level"] == "HIGH"
 
 
 @pytest.mark.asyncio
 async def test_inference_pipeline_low_confidence_lid_skips_asr():
-    # Low confidence LID (< 0.60) must result in skipped ASR and inconclusive overall status
     mock_lid = {
         "status": "success",
         "language": "en",
@@ -125,10 +187,12 @@ async def test_inference_pipeline_low_confidence_lid_skips_asr():
     }
 
     mock_asr_call = AsyncMock()
+    mock_rias_call = AsyncMock()
 
     with patch("app.api.routes.lid_client.identify", new=AsyncMock(return_value=mock_lid)), \
          patch("app.api.routes.asr_client.transcribe", new=mock_asr_call), \
-         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)):
+         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)), \
+         patch("app.api.routes.rias_client.assess", new=mock_rias_call):
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             files = {"file": ("chunk.wav", b"dummy-audio-content", "audio/wav")}
@@ -140,13 +204,15 @@ async def test_inference_pipeline_low_confidence_lid_skips_asr():
             assert res_data["lid"]["status"] == "inconclusive"
             assert res_data["transcription"]["status"] == "skipped"
             assert res_data["transcription"]["text"] is None
-            # Verify ASR was NOT called
+            assert res_data["rias"]["status"] == "skipped"
+            assert res_data["rias"]["risk_level"] == "INCONCLUSIVE"
+            # Verify ASR and RIAS were NOT called
             mock_asr_call.assert_not_called()
+            mock_rias_call.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_inference_pipeline_asr_failure_inconclusive():
-    # ASR failure must produce inconclusive overall status
     mock_lid = {
         "status": "success",
         "language": "en",
@@ -170,10 +236,12 @@ async def test_inference_pipeline_asr_failure_inconclusive():
         "model_version": "aasist-fallback",
         "latency_ms": 100.0,
     }
+    mock_rias_call = AsyncMock()
 
     with patch("app.api.routes.lid_client.identify", new=AsyncMock(return_value=mock_lid)), \
          patch("app.api.routes.asr_client.transcribe", new=AsyncMock(return_value=mock_asr)), \
-         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)):
+         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)), \
+         patch("app.api.routes.rias_client.assess", new=mock_rias_call):
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             files = {"file": ("chunk.wav", b"dummy-audio-content", "audio/wav")}
@@ -183,3 +251,45 @@ async def test_inference_pipeline_asr_failure_inconclusive():
             res_data = res.json()
             assert res_data["status"] == "inconclusive"
             assert res_data["transcription"]["status"] == "error"
+            assert res_data["rias"]["status"] == "skipped"
+            assert res_data["rias"]["risk_level"] == "INCONCLUSIVE"
+            mock_rias_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_inference_pipeline_rias_failure_inconclusive():
+    mock_lid = {
+        "status": "success",
+        "language": "en",
+        "confidence": 0.95,
+    }
+    mock_asr = {
+        "status": "success",
+        "text": "Hello, how are you today?",
+        "language": "en",
+    }
+    mock_spoof = {
+        "status": "success",
+        "prediction": "GENUINE",
+    }
+    mock_rias = {
+        "status": "inconclusive",
+        "risk_level": "INCONCLUSIVE",
+        "failure_reason": "INFERENCE_TIMEOUT",
+    }
+
+    with patch("app.api.routes.lid_client.identify", new=AsyncMock(return_value=mock_lid)), \
+         patch("app.api.routes.asr_client.transcribe", new=AsyncMock(return_value=mock_asr)), \
+         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)), \
+         patch("app.api.routes.rias_client.assess", new=AsyncMock(return_value=mock_rias)):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            files = {"file": ("chunk.wav", b"dummy-audio-content", "audio/wav")}
+            res = await ac.post("/v1/inference", files=files)
+
+            assert res.status_code == 200
+            res_data = res.json()
+            assert res_data["status"] == "inconclusive"
+            assert res_data["rias"]["status"] == "inconclusive"
+            assert res_data["rias"]["risk_level"] == "INCONCLUSIVE"
+            assert res_data["rias"]["failure_reason"] == "INFERENCE_TIMEOUT"

@@ -11,8 +11,8 @@
 **CloudForge Intelligence Core (CFIC)** is the backend intelligence system powering **VoiceShield**, designed for real-time defense against deepfake synthesized voices and conversational social engineering.
 
 The system is strictly divided into two decoupled subsystems:
-1. **API Gateway (`api-gateway/`)**: Public edge gateway managing client connections, authentication, sliding-window rate limiting, audio payload validation, 5-second chunking orchestration, application-level risk aggregation, decision management, and user-facing responses.
-2. **Cloud Inference (`cloud-inference/`)**: Dedicated, model-serving subsystem managing Language Identification (LID), language-specific IndicConformer ASR checkpoints, and dual acoustic spoof detection models (VMC-South fine-tuned AASIST-L and AASIST-L fallback).
+1. **API Gateway (`api-gateway/`)**: Public edge gateway managing client connections, authentication, sliding-window rate limiting, audio payload validation, chunking orchestration, application-level risk aggregation, decision management, and user-facing responses.
+2. **Cloud Inference (`cloud-inference/`)**: Dedicated, model-serving subsystem managing Language Identification (LID), language-specific ASR checkpoints (English Whisper Base.en & IndicConformer), dual acoustic spoof detection models (VMC-South and AASIST-L fallback), and containerized Gemma 4 E2B IT RIAS LLM inference.
 
 ```
                       VoiceShield Client Audio Payload
@@ -24,7 +24,7 @@ The system is strictly divided into two decoupled subsystems:
                 │  - Sliding Window Rate Limiter (30/60s) │
                 │  - Max Audio Validation (≤ 25 MiB)      │
                 │  - X-Request-ID Distributed Tracing     │
-                │  - 5-Second Window Chunk Orchestration  │
+                │  - 10-Second Window Chunk Orchestration │
                 └────────────────────┬────────────────────┘
                                      │ (Private Network)
                                      ▼
@@ -32,24 +32,30 @@ The system is strictly divided into two decoupled subsystems:
                 │     Cloud Inference Orchestrator (8200) │
                 │  - Step 1: Language Identification      │
                 │  - Step 2: Dynamic Checkpoint Routing   │
-                │  - Step 3: Concurrent Model Execution   │
+                │  - Step 3: Concurrent Acoustic Spoof    │
+                │  - Step 4: Gemma RIAS Semantic Risk     │
                 └──────────────┬───────────────────┬──────┘
                                │                   │
                  ┌─────────────┴─────┐       ┌─────┴──────────────┐
                  ▼                   ▼       ▼                    ▼
           ┌─────────────┐     ┌─────────────┐ ┌────────────┐ ┌─────────────┐
           │  Model LID  │     │ Indic-      │ │ VMC-South  │ │  AASIST-L   │
-          │   (8301)    │     │ Conformer   │ │ (AASIST-L  │ │  Fallback   │
-          │   Identify  │     │ (EN/TE/HI)  │ │ South-Ind) │ │  (English)  │
+          │   (8301)    │     │ Conformer / │ │ (AASIST-L  │ │  Fallback   │
+          │   Identify  │     │ Whisper EN  │ │ South-Ind) │ │  (English)  │
           │   Language  │     │ (8311-8313) │ │   (8321)   │ │   (8322)    │
-          └─────────────┘     └─────────────┘ └────────────┘ └─────────────┘
-                                     │                   │
-                                     └─────────┬─────────┘
-                                               │ (Unified Inference Response)
-                                               ▼
+          └─────────────┘     └──────┬──────┘ └────────────┘ └─────────────┘
+                                     │
+                                     ▼
+                              ┌─────────────┐
+                              │ Model RIAS  │
+                              │ Gemma 4 E2B │
+                              │   (8331)    │
+                              └──────┬──────┘
+                                     │ (Unified Multi-Modal Response)
+                                     ▼
                 ┌─────────────────────────────────────────┐
                 │      API Gateway Decision Engine        │
-                │  - Conversational Risk Synthesis (RIAS) │
+                │  - Acoustic + Semantic Fusion (TCED)    │
                 │  - Mandatory HIGH Risk Override         │
                 │  - Fail-Safe Inconclusive Policy        │
                 └────────────────────┬────────────────────┘
@@ -71,19 +77,18 @@ The system is strictly divided into two decoupled subsystems:
 - Authentication and client authorization (`X-API-Key`).
 - Sliding-window in-memory rate limiting.
 - Audio payload validation (MIME types, size cap ≤ 25 MiB).
-- Temporary audio storage and 5-second chunking orchestration.
+- Temporary audio storage and 10-second chunking orchestration.
 - Application-level job creation and status tracking.
-- Semantic risk synthesis and conversational fraud analysis.
-- Decision engine (fusing acoustic spoof verdict with conversational risk).
+- Decision engine (fusing acoustic spoof verdict with conversational risk via TCED).
 - Response normalization and client serialization.
 
 ### Cloud Inference Owns:
-- Language Identification (LID).
-- ASR model selection (English vs regional Indic checkpoints).
-- IndicConformer CTC/RNNT transcription execution.
+- Language Identification (LID) via `onecxi/open-vakgyata` (port 8301).
+- ASR model selection (English `openai/whisper-base.en` on port 8311 vs regional IndicConformer checkpoints).
 - Regional spoof detector routing:
-  - **VMC-South**: Fine-tuned AASIST-L for South Indian speech (Telugu, Tamil, Kannada, Malayalam).
-  - **AASIST-L Fallback**: Standard AASIST-L for English and non-regional audio.
+  - **VMC-South**: Fine-tuned AASIST-L for South Indian speech (Telugu, Tamil, Kannada, Malayalam, port 8321).
+  - **AASIST-L Fallback**: Standard AASIST-L for English and non-regional audio (port 8322).
+- Semantic fraud risk assessment via containerized **Gemma 4 E2B IT Q4_K_M** (port 8331).
 - Model-specific audio resampling (16 kHz mono) and tensor preparation.
 - Inference latency tracking per model.
 - Model result normalization.

@@ -1,0 +1,15 @@
+# Ignore model binaries from Docker build context
+**/*.gguf
+**/*.bin
+**/*.pt
+**/*.pth
+**/*.safetensors
+**/*.onnx
+**/weights/*
+!**/weights/.gitkeep
+
+# Ignore caches and temporary files
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.coverage
