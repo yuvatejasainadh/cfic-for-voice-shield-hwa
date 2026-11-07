@@ -1,0 +1,191 @@
+{
+  "test_1_telugu": {
+    "status": "PASSED",
+    "http_status": 200,
+    "final_outcome": "INCONCLUSIVE",
+    "latency_ms": 8225.07,
+    "data": {
+      "request_id": "462758a2-e28b-4e83-a2c3-c99ff0b05394",
+      "final_outcome": "INCONCLUSIVE",
+      "reason_code": "PARTIAL_EVIDENCE_POLICY_TBD",
+      "pella_status": "success",
+      "rias_transcription_status": "success",
+      "rias_risk_status": "skipped",
+      "rias_risk_level": null,
+      "model_version": "aasist-fallback-v1.0",
+      "latency_ms": {
+        "transcription": 0.0,
+        "pella": 74.42,
+        "rias_llm": 0.0,
+        "total": 7356.89
+      }
+    }
+  },
+  "test_2_hindi": {
+    "status": "PASSED",
+    "http_status": 200,
+    "final_outcome": "INCONCLUSIVE",
+    "latency_ms": 2716.42,
+    "data": {
+      "request_id": "be8b4a8a-0131-44e1-b804-58a26719f636",
+      "final_outcome": "INCONCLUSIVE",
+      "reason_code": "PARTIAL_EVIDENCE_POLICY_TBD",
+      "pella_status": "success",
+      "rias_transcription_status": "success",
+      "rias_risk_status": "skipped",
+      "rias_risk_level": null,
+      "model_version": "vmc-south-aasistl-v1.0",
+      "latency_ms": {
+        "transcription": 0.0,
+        "pella": 62.29,
+        "rias_llm": 0.0,
+        "total": 2432.28
+      }
+    }
+  },
+  "test_3_english": {
+    "status": "PASSED",
+    "http_status": 200,
+    "final_outcome": "INCONCLUSIVE",
+    "latency_ms": 51742.96,
+    "data": {
+      "request_id": "47b800f3-b5e5-4070-96a6-169dc24ac0f6",
+      "final_outcome": "INCONCLUSIVE",
+      "reason_code": "INSUFFICIENT_EVIDENCE",
+      "pella_status": "error",
+      "rias_transcription_status": "error",
+      "rias_risk_status": "skipped",
+      "rias_risk_level": null,
+      "model_version": null,
+      "latency_ms": {
+        "pella": 31.3,
+        "transcription": 20.78,
+        "rias_llm": 0.0,
+        "total": 51009.76
+      }
+    }
+  },
+  "test_4_unsupported_language": {
+    "status": "PASSED",
+    "http_status": 200,
+    "final_outcome": "INCONCLUSIVE",
+    "latency_ms": 2380.33,
+    "data": {
+      "request_id": "e1822297-4b3c-4ae9-8ae5-9e387cec1659",
+      "final_outcome": "INCONCLUSIVE",
+      "reason_code": "PARTIAL_EVIDENCE_POLICY_TBD",
+      "pella_status": "success",
+      "rias_transcription_status": "success",
+      "rias_risk_status": "skipped",
+      "rias_risk_level": null,
+      "model_version": "aasist-fallback-v1.0",
+      "latency_ms": {
+        "transcription": 0.0,
+        "pella": 49.28,
+        "rias_llm": 0.0,
+        "total": 1485.07
+      }
+    }
+  },
+  "test_5_invalid_audio": {
+    "status": "PASSED",
+    "http_status": 200,
+    "latency_ms": 1342.93,
+    "data": {
+      "request_id": "7d8ca1f4-a5e4-470a-81d1-7729cdfe8f6c",
+      "final_outcome": "INCONCLUSIVE",
+      "reason_code": "PARTIAL_EVIDENCE_POLICY_TBD",
+      "pella_status": "success",
+      "rias_transcription_status": "success",
+      "rias_risk_status": "skipped",
+      "rias_risk_level": null,
+      "model_version": "aasist-fallback-v1.0",
+      "latency_ms": {
+        "transcription": 0.0,
+        "pella": 26.65,
+        "rias_llm": 0.0,
+        "total": 488.86
+      }
+    }
+  },
+  "test_6_large_audio": {
+    "status": "PASSED",
+    "http_status": 200,
+    "duration_s": 11.93,
+    "latency_ms": 35321.92,
+    "data": {
+      "request_id": "fd513593-8e69-49ab-847e-7dfdabba89c8",
+      "final_outcome": "INCONCLUSIVE",
+      "reason_code": "PARTIAL_EVIDENCE_POLICY_TBD",
+      "pella_status": "success",
+      "rias_transcription_status": "success",
+      "rias_risk_status": "inconclusive",
+      "rias_risk_level": null,
+      "model_version": "aasist-fallback-v1.0",
+      "latency_ms": {
+        "transcription": 2763.31,
+        "pella": 62.49,
+        "rias_llm": 28652.94,
+        "total": 34573.66
+      }
+    }
+  },
+  "test_7_empty_audio": {
+    "status": "PASSED",
+    "http_status": 400,
+    "latency_ms": 918.46,
+    "data": {
+      "error_code": "EMPTY_AUDIO_PAYLOAD",
+      "detail": "Received empty audio payload (0 bytes)",
+      "request_id": "f8bfd7ad-01ed-4ede-b013-ee7603316de8"
+    }
+  },
+  "test_8_rias_unavailable": {
+    "status": "PASSED",
+    "http_status": 200,
+    "final_decision": "INCONCLUSIVE",
+    "latency_ms": 10275.14,
+    "data": {
+      "request_id": "a4de34f5-ae24-4c61-afe2-528d4a871cb2",
+      "final_outcome": "INCONCLUSIVE",
+      "reason_code": "PARTIAL_EVIDENCE_POLICY_TBD",
+      "pella_status": "success",
+      "rias_transcription_status": "success",
+      "rias_risk_status": "inconclusive",
+      "rias_risk_level": null,
+      "model_version": "aasist-fallback-v1.0",
+      "latency_ms": {
+        "transcription": 1995.53,
+        "pella": 48.67,
+        "rias_llm": 5516.67,
+        "total": 9483.3
+      }
+    }
+  },
+  "test_9_lid_unavailable": {
+    "status": "PASSED",
+    "http_status": 200,
+    "final_decision": "INCONCLUSIVE",
+    "latency_ms": 41038.67,
+    "data": {
+      "request_id": "fedfad1a-d0bd-480b-9827-57ce5f4d1e42",
+      "final_outcome": "INCONCLUSIVE",
+      "reason_code": "PARTIAL_EVIDENCE_POLICY_TBD",
+      "pella_status": "success",
+      "rias_transcription_status": "success",
+      "rias_risk_status": "skipped",
+      "rias_risk_level": null,
+      "model_version": "aasist-fallback-v1.0",
+      "latency_ms": {
+        "transcription": 0.0,
+        "pella": 88.41,
+        "rias_llm": 0.0,
+        "total": 40590.78
+      }
+    }
+  },
+  "test_10_privacy_audit": {
+    "status": "PASSED",
+    "leaks_found": 0
+  }
+}

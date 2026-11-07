@@ -2,6 +2,7 @@
 
 import os
 import time
+from typing import Optional
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
@@ -12,6 +13,7 @@ app = FastAPI(
 )
 
 MODEL_PATH = os.getenv("ASR_HI_MODEL_PATH", "weights/indicconformer_hi.nemo")
+MODEL_ID = os.getenv("ASR_HI_MODEL_ID", "ai4bharat/indicconformer-hi")
 MODEL_VERSION = os.getenv("ASR_HI_MODEL_VERSION", "indicconformer-hi-large-v1")
 IS_MOCK = os.getenv("ASR_HI_USE_MOCK", "true").lower() == "true"
 
@@ -20,7 +22,9 @@ class ASRResponse(BaseModel):
     status: str
     text: str | None
     language: str
-    model_version: str
+    model_id: str = MODEL_ID
+    model_version: str = MODEL_VERSION
+    model_revision: Optional[str] = "v1"
     latency_ms: float
 
 
@@ -28,6 +32,7 @@ class ASRHealthResponse(BaseModel):
     status: str
     service: str
     target_language: str
+    model_id: str
     model_version: str
     artifact_found: bool
     is_mock: bool
@@ -39,6 +44,7 @@ async def health():
         status="ok",
         service="model-asr-hi",
         target_language="hi",
+        model_id=MODEL_ID,
         model_version=MODEL_VERSION,
         artifact_found=os.path.exists(MODEL_PATH),
         is_mock=IS_MOCK,
@@ -58,7 +64,9 @@ async def transcribe(file: UploadFile = File(...)):
             status="success",
             text="कृपया अपने बैंक खाते का विवरण तुरंत सत्यापित करें।",
             language="hi",
+            model_id=MODEL_ID,
             model_version=MODEL_VERSION,
+            model_revision="v1",
             latency_ms=elapsed_ms,
         )
 
