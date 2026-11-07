@@ -36,6 +36,7 @@ services:
       - INFERENCE_VMC_SOUTH_SERVICE_URL=http://model-vmc-south:8321
       - INFERENCE_AASIST_FALLBACK_SERVICE_URL=http://model-aasist-fallback:8322
       - INFERENCE_RIAS_SERVICE_URL=http://model-rias-gemma:8331
+      - INFERENCE_RIAS_TIMEOUT_SECONDS=30.0
       - INFERENCE_LID_MAX_RETRIES=2
       - INFERENCE_LID_CONFIDENCE_THRESHOLD=0.60
     depends_on:
@@ -144,8 +145,8 @@ services:
       - RIAS_N_THREADS=4
       - RIAS_N_CTX=2048
       - RIAS_MAX_TOKENS=16
-      - RIAS_TIMEOUT_SECONDS=15.0
-      - RIAS_QUEUE_TIMEOUT_SECONDS=5.0
+      - RIAS_TIMEOUT_SECONDS=30.0
+      - RIAS_QUEUE_TIMEOUT_SECONDS=10.0
       - RIAS_MAX_CONCURRENT_REQUESTS=2
       - RIAS_MAX_QUEUE_SIZE=10
     volumes:
@@ -153,7 +154,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 6G
     networks:
       - cfic-internal-network
 

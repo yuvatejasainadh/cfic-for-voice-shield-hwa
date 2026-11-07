@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     model_timeout_seconds: float = 15.0
     lid_timeout_seconds: float = 10.0
     asr_timeout_seconds: float = 15.0
-    rias_timeout_seconds: float = 15.0
+    rias_timeout_seconds: float = 30.0
 
     # Policy controls
     lid_max_retries: int = 2

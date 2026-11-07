@@ -25,7 +25,6 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser \
     && chown -R appuser:appuser /app
 
 COPY --chown=appuser:appuser models/rias/app ./app
-COPY --chown=appuser:appuser models/rias/weights ./weights
 
 USER appuser
 
@@ -40,12 +39,12 @@ ENV PYTHONUNBUFFERED=1 \
     RIAS_N_THREADS=4 \
     RIAS_N_CTX=2048 \
     RIAS_MAX_TOKENS=16 \
-    RIAS_TIMEOUT_SECONDS=15.0 \
-    RIAS_QUEUE_TIMEOUT_SECONDS=5.0 \
+    RIAS_TIMEOUT_SECONDS=30.0 \
+    RIAS_QUEUE_TIMEOUT_SECONDS=10.0 \
     RIAS_MAX_CONCURRENT_REQUESTS=2 \
     RIAS_MAX_QUEUE_SIZE=10
 
-HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=20s --timeout=5s --start-period=180s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8331/health')" || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8331"]

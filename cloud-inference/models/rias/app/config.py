@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     n_threads: int = 4
     n_ctx: int = 2048
     max_tokens: int = 16
-    timeout_seconds: float = 15.0
-    queue_timeout_seconds: float = 5.0
+    timeout_seconds: float = 30.0
+    queue_timeout_seconds: float = 10.0
     max_concurrent_requests: int = 2
     max_queue_size: int = 10
     max_transcript_length: int = 5000
