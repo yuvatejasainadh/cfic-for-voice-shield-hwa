@@ -36,6 +36,7 @@ async def health():
             "asr_en": settings.asr_en_service_url,
             "asr_te": settings.asr_te_service_url,
             "asr_hi": settings.asr_hi_service_url,
+            "pellav2": settings.pellav2_service_url,
             "vmc_south": settings.vmc_south_service_url,
             "aasist_fallback": settings.aasist_fallback_service_url,
             "rias": settings.rias_service_url,

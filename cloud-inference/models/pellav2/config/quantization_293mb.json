@@ -1,0 +1,20 @@
+﻿{
+    "model_name":  "PellaV2",
+    "variant":  "293mb",
+    "model_file":  "pellav2_k12_int8_final.pt",
+    "file_format":  "PyTorch checkpoint (.pt)",
+    "quantization":  "INT8 (indicated by filename; not independently inspected)",
+    "actual_file_size_bytes":  292876453,
+    "actual_file_size_mib":  279.31,
+    "sha256":  "41C14CD6252FD3E94475B3277EB13B6F8FC463D5EDF5B741B521F14BCFDA0F98",
+    "calibration_file":  "k12_calibration.json",
+    "calibration_parameters":  {
+                                   "a":  1.5635074958458532,
+                                   "b":  -0.08237249469081723
+                               },
+    "architecture":  null,
+    "parameter_count":  null,
+    "base_model":  null,
+    "tokenizer_details":  null,
+    "note":  "Unknown model details are deliberately not fabricated."
+}

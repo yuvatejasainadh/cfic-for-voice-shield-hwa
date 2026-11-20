@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     asr_en_service_url: str = "http://localhost:8311"
     asr_te_service_url: str = "http://localhost:8312"
     asr_hi_service_url: str = "http://localhost:8313"
+    pellav2_service_url: str = ""
     vmc_south_service_url: str = "http://localhost:8321"
     aasist_fallback_service_url: str = "http://localhost:8322"
     rias_service_url: str = "http://localhost:8331"
