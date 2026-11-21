@@ -1,0 +1,162 @@
+{
+  "dataset_root": "C:\\Users\\yuvat\\Music\\Deepfake Dataset",
+  "total_files": 12000,
+  "categories": {
+    "fake_voice_fake_bg_wf_4s": {
+      "ground_truth": "FAKE",
+      "subcategories": {
+        "balanced": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        },
+        "bg_dominant": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        },
+        "voice_dominant": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        }
+      },
+      "total_files": 3000
+    },
+    "fake_voice_real_bg_wf_4s": {
+      "ground_truth": "FAKE",
+      "subcategories": {
+        "balanced": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        },
+        "bg_dominant": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        },
+        "voice_dominant": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        }
+      },
+      "total_files": 3000
+    },
+    "real_voice_fake_bg_wf_4s": {
+      "ground_truth": "GENUINE",
+      "subcategories": {
+        "balanced": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        },
+        "bg_dominant": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        },
+        "voice_dominant": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        }
+      },
+      "total_files": 3000
+    },
+    "real_voice_real_bg_wf_4s": {
+      "ground_truth": "GENUINE",
+      "subcategories": {
+        "balanced": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        },
+        "bg_dominant": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        },
+        "voice_dominant": {
+          "count": 1000,
+          "sample_properties": {
+            "samplerate": 16000,
+            "channels": 1,
+            "duration_sec": 4.0,
+            "format": "WAV",
+            "subtype": "PCM_16",
+            "file_size_bytes": 128044
+          }
+        }
+      },
+      "total_files": 3000
+    }
+  }
+}

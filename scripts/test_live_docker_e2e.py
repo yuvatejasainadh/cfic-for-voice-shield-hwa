@@ -160,7 +160,7 @@ def test_tced_row5_detector_unavailable_low():
     )
     assert outcome == FinalOutcome.INCONCLUSIVE
     assert outcome != FinalOutcome.GENUINE
-    assert reason == "PARTIAL_EVIDENCE_POLICY_TBD"
+    assert reason == "ACOUSTIC_EVIDENCE_UNAVAILABLE"
 
 
 def test_tced_row6_both_unavailable():

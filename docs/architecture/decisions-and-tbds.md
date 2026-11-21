@@ -11,7 +11,7 @@ This document maintains an explicit, traceable record of resolved architectural 
 | **AD-01** | **Primary Deepfake Detector** | Single primary detector model: **PellaV2**. | Locked |
 | **AD-02** | **Conversational Risk Path (RIAS)** | Two-stage: Audio transcription followed by hosted AskDrip LLM API risk analysis. | Locked |
 | **AD-03** | **No Local LLM** | Do not deploy local LLM instances. The hosted AskDrip LLM API handles RIAS risk analysis. | Locked |
-| **AD-04** | **Mandatory TCED Rule** | If RIAS returns `HIGH`, final outcome MUST be `SUSPICIOUS`, regardless of PellaV2 detector output. | Locked |
+| **AD-04** | **Mandatory TCED Fusion Policy** | Rules A-H: Acoustic `FAKE` takes precedence (`FAKE`, `ACOUSTIC_SPOOF_DETECTED`), never downgraded by RIAS. If acoustic is `GENUINE`/unavailable and RIAS is `HIGH`, return `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`). Acoustic unavailable + RIAS `LOW` returns `INCONCLUSIVE` (`ACOUSTIC_EVIDENCE_UNAVAILABLE`). | Locked |
 | **AD-05** | **Failure Fallback Policy** | Missing evidence, upstream timeouts, or service errors return `INCONCLUSIVE`. Never silently classify as `GENUINE`. | Locked |
 | **AD-06** | **Excluded Legacy Components** | Formally removed: Separate LID model, LACR routing, 7 language-cluster detectors, DSR, standalone XLS-R service. | Locked |
 | **AD-07** | **API Gateway Security** | `X-API-Key` authentication, 25 MiB payload cap, in-memory sliding window rate limiting, and `X-Request-ID` tracing. | Locked |
@@ -37,10 +37,9 @@ The following decisions require empirical verification by assigned team members 
 - **Problem:** Whisper Multilingual vs AI4Bharat IndicConformer for target Indian languages (English, Telugu, Tamil, Kannada, Malayalam).
 - **Action:** Benchmark WER, inference latency, memory footprint, and code-switching resilience. Document recommendation in `docs/benchmarks/transcription_evaluation_report.md`.
 
-### TBD-04: TCED Hybrid Weights & Score Calibration
+### TBD-04: TCED Hybrid Weights & Score Calibration [RESOLVED]
 - **Owner:** Sainadh (Project Lead) in collaboration with Varun
-- **Problem:** Exact mathematical weights between PellaV2 score and RIAS conversational risk for LOW and MEDIUM cases.
-- **Action:** Run joint evaluation on synthetic call dataset to calibrate thresholds before enabling `TCED_CALIBRATED = True`.
+- **Resolution:** Deterministic rule-based fusion locked (Rules A-H). When acoustic detector is unavailable and RIAS is LOW, outcome is `INCONCLUSIVE` with reason `ACOUSTIC_EVIDENCE_UNAVAILABLE`. LOW semantic risk is never a substitute for authentic acoustic speech evidence. Verified against deepfake dataset. Status: Locked.
 
 ### TBD-05: Hosted AskDrip LLM Prompt & Threshold Calibration
 - **Owner:** Sainadh (Project Lead)

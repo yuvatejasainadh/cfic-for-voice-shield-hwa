@@ -1,0 +1,30 @@
+{
+  "fake_voice_fake_bg_wf_4s": {
+    "count": 0,
+    "ground_truth": "FAKE",
+    "total_size_mb": 0.0,
+    "avg_size_kb": 0.0,
+    "sample_properties": {}
+  },
+  "fake_voice_real_bg_wf_4s": {
+    "count": 0,
+    "ground_truth": "FAKE",
+    "total_size_mb": 0.0,
+    "avg_size_kb": 0.0,
+    "sample_properties": {}
+  },
+  "real_voice_fake_bg_wf_4s": {
+    "count": 0,
+    "ground_truth": "GENUINE",
+    "total_size_mb": 0.0,
+    "avg_size_kb": 0.0,
+    "sample_properties": {}
+  },
+  "real_voice_real_bg_wf_4s": {
+    "count": 0,
+    "ground_truth": "GENUINE",
+    "total_size_mb": 0.0,
+    "avg_size_kb": 0.0,
+    "sample_properties": {}
+  }
+}

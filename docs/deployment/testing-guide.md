@@ -62,14 +62,16 @@ python -m pytest tests/unit/test_tced.py -v -k "high_rias"
 
 ## 4. Key Test Scenarios Covered
 
-1. **Mandatory TCED Rule:**
-   - RIAS `HIGH` produces `SUSPICIOUS` even when Pella reports `GENUINE`.
-   - RIAS `HIGH` produces `SUSPICIOUS` when Pella reports `FAKE`.
-   - RIAS `HIGH` produces `SUSPICIOUS` when Pella fails.
+1. **Mandatory TCED Rules (Rules A-H):**
+   - Acoustic `FAKE` produces `FAKE` (`ACOUSTIC_SPOOF_DETECTED`) regardless of RIAS `LOW` or `HIGH`.
+   - Acoustic `GENUINE` + RIAS `LOW` produces `GENUINE` (`ACOUSTIC_GENUINE_CONFIRMED`).
+   - Acoustic `GENUINE` + RIAS `HIGH` produces `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`).
+   - Acoustic unavailable + RIAS `HIGH` produces `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`).
+   - Acoustic unavailable + RIAS `LOW` produces `INCONCLUSIVE` (`ACOUSTIC_EVIDENCE_UNAVAILABLE`).
 2. **Failure Handling:**
    - Both paths fail -> `INCONCLUSIVE` (reason: `INSUFFICIENT_EVIDENCE`).
-   - One path fails -> `INCONCLUSIVE` (reason: `PARTIAL_EVIDENCE_POLICY_TBD`).
-   - Unrecognized RIAS risk level -> `INCONCLUSIVE` (never defaults to `LOW`).
+   - Missing/unavailable acoustic evidence -> `INCONCLUSIVE` (reason: `ACOUSTIC_EVIDENCE_UNAVAILABLE`).
+   - Unrecognized RIAS risk level -> `INCONCLUSIVE` (reason: `INVALID_RIAS_RISK_LEVEL`, never defaults to `LOW`).
 3. **Gateway Protection:**
    - Missing or invalid `X-API-Key` returns `401 Unauthorized`.
    - Empty audio payload returns `400 Bad Request`.

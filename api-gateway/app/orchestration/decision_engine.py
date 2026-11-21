@@ -4,12 +4,19 @@ Synthesizes acoustic spoof evidence with semantic conversational risk to
 produce a deterministic final verdict: GENUINE, FAKE, SUSPICIOUS, or INCONCLUSIVE.
 
 Locked Safety Rules:
-1. If semantic risk analysis returns HIGH, the final outcome MUST be SUSPICIOUS
-   (Reason: HIGH_RIAS_OVERRIDE), regardless of acoustic detector verdict.
-2. If semantic risk analysis returns an invalid/unrecognized risk level, it must never
+1. Rule A & D: Acoustic FAKE always yields FAKE (Reason: ACOUSTIC_SPOOF_DETECTED).
+   Acoustic spoof evidence must never be downgraded by RIAS reporting LOW or HIGH.
+2. Rule H: If semantic risk analysis returns an invalid/unrecognized risk level, it must never
    be defaulted to LOW; it returns INCONCLUSIVE (Reason: INVALID_RIAS_RISK_LEVEL).
-3. If components fail, time out, or provide missing/partial evidence, the system
-   returns INCONCLUSIVE. It never silently classifies an error as GENUINE.
+3. Rule C & E: If acoustic is GENUINE or UNAVAILABLE, and semantic risk returns HIGH,
+   the outcome is SUSPICIOUS (Reason: HIGH_RIAS_OVERRIDE).
+4. Rule B: If acoustic returns GENUINE and semantic risk returns LOW or MEDIUM,
+   the outcome is GENUINE (Reason: ACOUSTIC_GENUINE_CONFIRMED).
+5. Rule G: If both evidence sources are unavailable/failed, return INCONCLUSIVE
+   (Reason: INSUFFICIENT_EVIDENCE).
+6. Rule F: If acoustic detector is unavailable and semantic risk is LOW or MEDIUM,
+   return INCONCLUSIVE (Reason: ACOUSTIC_EVIDENCE_UNAVAILABLE).
+   LOW semantic risk is not proof of authentic speech.
 """
 
 from typing import Any
@@ -19,7 +26,7 @@ from app.schemas.analysis import FinalOutcome, RiskLevel
 class DecisionEngine:
     """Fuses multi-modal evidence streams into final decision verdicts."""
 
-    def __init__(self, calibrated: bool = False):
+    def __init__(self, calibrated: bool = True):
         self.calibrated = calibrated
 
     def decide(
@@ -30,8 +37,8 @@ class DecisionEngine:
         """Synthesize acoustic detection and conversational risk.
 
         Args:
-            spoof_res: Acoustic detector result dict (from VMC-South, AASIST, or legacy Pella)
-            risk_res: Semantic risk analysis result dict (from RIAS / RiskService)
+            spoof_res: Acoustic detector result dict (from PellaV2, VMC-South, or AASIST)
+            risk_res: Semantic risk analysis result dict (from RIAS / Gemma)
 
         Returns:
             tuple[FinalOutcome, str]: (final_outcome, reason_code)
@@ -40,52 +47,62 @@ class DecisionEngine:
         risk = risk_res or {}
 
         spoof_status = spoof.get("status")
+        raw_pred = spoof.get("prediction")
+        prediction = str(raw_pred).upper().strip() if raw_pred else None
+
         risk_status = risk.get("status")
         raw_risk = risk.get("risk_level")
-        risk_level_val = raw_risk.value if isinstance(raw_risk, RiskLevel) else (str(raw_risk) if raw_risk else None)
+        risk_level_val = (
+            raw_risk.value
+            if isinstance(raw_risk, RiskLevel)
+            else (str(raw_risk).upper().strip() if raw_risk else None)
+        )
 
-        # RULE 1: Locked Safety Override - HIGH risk forces SUSPICIOUS
-        if risk_status == "success" and risk_level_val == RiskLevel.HIGH.value:
-            return FinalOutcome.SUSPICIOUS, "HIGH_RIAS_OVERRIDE"
-
-        # RULE 2: Validate semantic risk validity if reported success
+        # RULE H: Validate semantic risk validity if reported success
         if risk_status == "success":
             valid_risk_levels = {r.value for r in RiskLevel}
             if risk_level_val not in valid_risk_levels:
                 return FinalOutcome.INCONCLUSIVE, "INVALID_RIAS_RISK_LEVEL"
 
-        # RULE 3: Check component success
-        spoof_ok = spoof_status == "success" and spoof.get("prediction") is not None
+        # Check acoustic validity
+        acoustic_ok = spoof_status == "success" and prediction in {"FAKE", "GENUINE"}
+
+        # RULE A & D: Acoustic FAKE priority
+        # When acoustic detector returns a valid FAKE classification,
+        # spoof evidence must not be downgraded because RIAS reports LOW or HIGH.
+        if acoustic_ok and prediction == "FAKE":
+            return FinalOutcome.FAKE, "ACOUSTIC_SPOOF_DETECTED"
+
+        # RULE C & E: HIGH RIAS Override
+        # If RIAS is HIGH, and acoustic is either GENUINE or UNAVAILABLE, outcome is SUSPICIOUS.
+        if risk_status == "success" and risk_level_val == RiskLevel.HIGH.value:
+            return FinalOutcome.SUSPICIOUS, "HIGH_RIAS_OVERRIDE"
+
+        # Optional uncalibrated legacy flag check
+        if not self.calibrated and acoustic_ok and risk_status == "success":
+            return FinalOutcome.INCONCLUSIVE, "TCED_CALIBRATION_TBD"
+
+        # RULE B: Acoustic GENUINE + RIAS LOW/MEDIUM
+        if (
+            acoustic_ok
+            and prediction == "GENUINE"
+            and risk_status == "success"
+            and risk_level_val in {RiskLevel.LOW.value, RiskLevel.MEDIUM.value}
+        ):
+            return FinalOutcome.GENUINE, "ACOUSTIC_GENUINE_CONFIRMED"
+
+        # RULE G: Both evidence sources unavailable
         risk_ok = risk_status == "success" and risk_level_val in {
             RiskLevel.LOW.value,
             RiskLevel.MEDIUM.value,
         }
-
-        # If both components failed to provide valid output
-        if not spoof_ok and not risk_ok:
+        if not acoustic_ok and not risk_ok:
             return FinalOutcome.INCONCLUSIVE, "INSUFFICIENT_EVIDENCE"
 
-        # If only one component succeeded (partial evidence)
-        if not spoof_ok or not risk_ok:
-            return FinalOutcome.INCONCLUSIVE, "PARTIAL_EVIDENCE_POLICY_TBD"
-
-        # RULE 5: Calibrated score fusion or TBD placeholder
-        if not self.calibrated:
-            return FinalOutcome.INCONCLUSIVE, "TCED_CALIBRATION_TBD"
-
-        return self._evaluate_calibrated_fusion(spoof, risk)
-
-    def _evaluate_calibrated_fusion(
-        self, spoof: dict[str, Any], risk: dict[str, Any]
-    ) -> tuple[FinalOutcome, str]:
-        """Calibrated mathematical fusion once empirical weights are verified."""
-        prediction = (spoof.get("prediction") or "").upper()
-        if prediction == "FAKE":
-            return FinalOutcome.FAKE, "ACOUSTIC_SPOOF_DETECTED"
-        elif prediction == "GENUINE":
-            return FinalOutcome.GENUINE, "ACOUSTIC_GENUINE_CONFIRMED"
-        return FinalOutcome.INCONCLUSIVE, "UNRESOLVED_SCORE"
+        # RULE F: Acoustic detector UNAVAILABLE + RIAS LOW (or partial evidence)
+        # LOW semantic risk is not proof of authentic speech.
+        return FinalOutcome.INCONCLUSIVE, "ACOUSTIC_EVIDENCE_UNAVAILABLE"
 
 
-decision_engine = DecisionEngine()
+decision_engine = DecisionEngine(calibrated=True)
 decide = decision_engine.decide  # export functional alias for backward compatibility

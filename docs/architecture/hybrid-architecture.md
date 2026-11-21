@@ -106,8 +106,10 @@ The system is strictly divided into two decoupled subsystems:
 
 ## 3. Decision Engine & Locked Safety Rules
 
-The Decision Engine (`api-gateway/app/tced/decision_policy.py`) enforces strict safety guarantees:
-1. **Locked Safety Override:** If conversational analysis returns `HIGH` risk, the final outcome **MUST BE `SUSPICIOUS`** (`HIGH_RIAS_OVERRIDE`), regardless of acoustic detector score.
-2. **Fail-Safe Fallback:** If upstream model services fail, time out, or produce missing evidence, the system returns `INCONCLUSIVE`. It **never silently classifies an error as `GENUINE`**.
-3. **Invalid Risk Guard:** Malformed or unrecognized risk levels immediately trigger `INCONCLUSIVE` (`INVALID_RIAS_RISK_LEVEL`).
-4. **Unsupported Language Guard:** Unsupported spoken languages skip ASR and RIAS and yield `INCONCLUSIVE` (`PARTIAL_EVIDENCE_POLICY_TBD`).
+The Decision Engine (`api-gateway/app/orchestration/decision_engine.py`) enforces strict safety guarantees (Rules A-H):
+1. **Rule A & D (Acoustic Spoof Priority):** Acoustic `FAKE` always returns `FAKE` (`ACOUSTIC_SPOOF_DETECTED`). Acoustic spoof evidence is never downgraded by RIAS reporting `LOW` or `HIGH`.
+2. **Rule C & E (High Risk Override):** When acoustic detection returns `GENUINE` or is unavailable, but RIAS returns `HIGH`, the final outcome is `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`).
+3. **Rule B (Dual Authentic Evidence):** When acoustic returns `GENUINE` and RIAS returns `LOW` or `MEDIUM`, the outcome is `GENUINE` (`ACOUSTIC_GENUINE_CONFIRMED`).
+4. **Rule F (Acoustic Unavailable + RIAS Low):** When acoustic detector is unavailable and RIAS returns `LOW`, the outcome is `INCONCLUSIVE` (`ACOUSTIC_EVIDENCE_UNAVAILABLE`). Low semantic risk is not proof of authentic speech.
+5. **Rule G (Insufficient Evidence):** If both evidence sources fail/are unavailable, return `INCONCLUSIVE` (`INSUFFICIENT_EVIDENCE`).
+6. **Rule H (Invalid Risk Guard):** Malformed or unrecognized risk levels immediately trigger `INCONCLUSIVE` (`INVALID_RIAS_RISK_LEVEL`).
