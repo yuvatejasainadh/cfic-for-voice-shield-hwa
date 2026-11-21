@@ -22,15 +22,13 @@ This document maintains an explicit, traceable record of resolved architectural 
 
 The following decisions require empirical verification by assigned team members before production deployment:
 
-### TBD-01: Exact PellaV2 Model Artifact & Score Polarity
-- **Owner:** Varun (MLOps Architect)
-- **Problem:** Need to verify whether the checkpoint is PyTorch (`.pt`) or ONNX, whether XLS-R is embedded, and the exact polarity of the acoustic score (e.g. is score $> 0.5$ fake or genuine?).
-- **Action:** Inspect checkpoint, test with known genuine/synthetic samples, and complete `models/artifact_manifest.json`.
+### TBD-01: Exact PellaV2 Model Artifact & Score Polarity [RESOLVED]
+- **Owner:** Varun (MLOps Architect) in collaboration with Engineering
+- **Resolution:** Checkpoint is PyTorch FP32 (`weights/pellav2_detector.pt`, 2.32 GB, SHA-256 `d21aedfb...`) sourced from `Sadanie/pellav2-audio-deepfake-detector` (revision `94b89991...`). Architecture is `facebook/w2v-bert-2.0` (300M parameter Conformer) with learned layer weights and linear projection head. Output is standard logistic sigmoid score $\in [0, 1]$, where score $\ge 0.50$ indicates `FAKE` and $< 0.50$ indicates `GENUINE`. Status: Locked.
 
-### TBD-02: PellaV2 Quantization Strategy
+### TBD-02: PellaV2 Quantization Strategy [RESOLVED]
 - **Owner:** Varun & Varshu
-- **Problem:** Determine whether INT8 dynamic quantization or FP16 produces acceptable Equal Error Rate (EER) trade-offs while meeting the $< 50$ ms latency target.
-- **Action:** Execute quantization benchmark and document in `docs/benchmarks/pellav2_quantization_report.md`.
+- **Resolution:** Empirical evaluation of INT8 dynamic quantization revealed severe model degradation (accuracy 47.50%, ROC-AUC 0.5099, false positive rate 58.33%). The original FP32 non-quantized model was integrated and benchmarked under identical conditions, achieving 71.67% accuracy, ROC-AUC 0.8483, and FPR 13.33% (93.33% accuracy on real speech). Decision: Retain original FP32 model in production with 8GB container RAM limit; post-training INT8 is rejected due to acoustic feature corruption. Status: Locked.
 
 ### TBD-03: Multilingual Transcription Model Selection
 - **Owner:** Pallavi (Cloud Engineer)

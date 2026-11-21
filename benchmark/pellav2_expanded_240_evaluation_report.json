@@ -1,0 +1,82 @@
+{
+  "evaluation_timestamp": "2026-11-21T07:34:13Z",
+  "total_evaluated": 240,
+  "accuracy": 0.6667,
+  "precision": 0.7381,
+  "recall": 0.5167,
+  "f1_score": 0.6078,
+  "roc_auc": 0.7557,
+  "fpr": 0.1833,
+  "fnr": 0.4833,
+  "confusion_matrix": {
+    "tp": 62,
+    "fp": 22,
+    "tn": 98,
+    "fn": 58
+  },
+  "latency_metrics": {
+    "mean_ms": 1713.36,
+    "p95_ms": 2065.29,
+    "rtf": 0.4283
+  },
+  "category_metrics": {
+    "fake_voice_fake_bg_wf_4s": {
+      "total": 60,
+      "accuracy": 0.55,
+      "tp": 33,
+      "fp": 0,
+      "tn": 0,
+      "fn": 27
+    },
+    "fake_voice_real_bg_wf_4s": {
+      "total": 60,
+      "accuracy": 0.4833,
+      "tp": 29,
+      "fp": 0,
+      "tn": 0,
+      "fn": 31
+    },
+    "real_voice_fake_bg_wf_4s": {
+      "total": 60,
+      "accuracy": 0.75,
+      "tp": 0,
+      "fp": 15,
+      "tn": 45,
+      "fn": 0
+    },
+    "real_voice_real_bg_wf_4s": {
+      "total": 60,
+      "accuracy": 0.8833,
+      "tp": 0,
+      "fp": 7,
+      "tn": 53,
+      "fn": 0
+    }
+  },
+  "condition_metrics": {
+    "balanced": {
+      "total": 80,
+      "accuracy": 0.5875,
+      "tp": 21,
+      "fp": 14,
+      "tn": 26,
+      "fn": 19
+    },
+    "bg_dominant": {
+      "total": 80,
+      "accuracy": 0.525,
+      "tp": 9,
+      "fp": 7,
+      "tn": 33,
+      "fn": 31
+    },
+    "voice_dominant": {
+      "total": 80,
+      "accuracy": 0.8875,
+      "tp": 32,
+      "fp": 1,
+      "tn": 39,
+      "fn": 8
+    }
+  }
+}
