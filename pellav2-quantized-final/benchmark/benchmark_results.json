@@ -1,0 +1,7 @@
+﻿{
+    "model":  "PellaV2",
+    "variant":  "293mb",
+    "status":  "not_benchmarked",
+    "measurements":  null,
+    "reason":  "No benchmark measurements or evaluation dataset were supplied."
+}
