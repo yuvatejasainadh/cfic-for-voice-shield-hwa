@@ -3,24 +3,31 @@
 Synthesizes acoustic spoof evidence with semantic conversational risk to
 produce a deterministic final verdict: GENUINE, FAKE, SUSPICIOUS, or INCONCLUSIVE.
 
-Locked Safety Rules:
-1. Rule A & D: Acoustic FAKE always yields FAKE (Reason: ACOUSTIC_SPOOF_DETECTED).
-   Acoustic spoof evidence must never be downgraded by RIAS reporting LOW or HIGH.
-2. Rule H: If semantic risk analysis returns an invalid/unrecognized risk level, it must never
-   be defaulted to LOW; it returns INCONCLUSIVE (Reason: INVALID_RIAS_RISK_LEVEL).
-3. Rule C & E: If acoustic is GENUINE or UNAVAILABLE, and semantic risk returns HIGH,
-   the outcome is SUSPICIOUS (Reason: HIGH_RIAS_OVERRIDE).
-4. Rule B: If acoustic returns GENUINE and semantic risk returns LOW or MEDIUM,
-   the outcome is GENUINE (Reason: ACOUSTIC_GENUINE_CONFIRMED).
-5. Rule G: If both evidence sources are unavailable/failed, return INCONCLUSIVE
-   (Reason: INSUFFICIENT_EVIDENCE).
-6. Rule F: If acoustic detector is unavailable and semantic risk is LOW or MEDIUM,
-   return INCONCLUSIVE (Reason: ACOUSTIC_EVIDENCE_UNAVAILABLE).
-   LOW semantic risk is not proof of authentic speech.
+The TCED Complete Policy implements an authoritative 15-combination matrix across:
+- Acoustic evidence: FAKE, GENUINE, UNAVAILABLE
+- RIAS evidence: LOW, MEDIUM, HIGH, UNAVAILABLE, INVALID
+
+Decision Priority Order:
+1. Priority 1 — Acoustic FAKE:
+   If acoustic evidence is FAKE, outcome is always FAKE (Reason: ACOUSTIC_SPOOF_DETECTED).
+   RIAS must never override or downgrade acoustic spoof evidence.
+2. Priority 2 — RIAS HIGH:
+   If acoustic is not FAKE and RIAS is HIGH, outcome is SUSPICIOUS (Reason: HIGH_RIAS_OVERRIDE).
+3. Priority 3 — Evidence Validity (RIAS INVALID):
+   If acoustic is not FAKE and RIAS returns an invalid/unparseable risk level,
+   outcome is INCONCLUSIVE (Reason: INVALID_RIAS_RISK_LEVEL). Invalid risk is never defaulted to LOW.
+4. Priority 4 — Confirmed GENUINE:
+   Only Acoustic GENUINE + RIAS LOW is allowed to produce GENUINE (Reason: ACOUSTIC_GENUINE_CONFIRMED).
+5. Priority 5 — Remaining Evidence Combinations:
+   - GENUINE + MEDIUM -> INCONCLUSIVE (Reason: EVIDENCE_CONFLICT)
+   - GENUINE + UNAVAILABLE -> INCONCLUSIVE (Reason: RIAS_EVIDENCE_UNAVAILABLE)
+   - UNAVAILABLE + LOW -> INCONCLUSIVE (Reason: ACOUSTIC_EVIDENCE_UNAVAILABLE)
+   - UNAVAILABLE + MEDIUM -> INCONCLUSIVE (Reason: INSUFFICIENT_EVIDENCE)
+   - UNAVAILABLE + UNAVAILABLE -> INCONCLUSIVE (Reason: INSUFFICIENT_EVIDENCE)
 """
 
 from typing import Any
-from app.schemas.analysis import FinalOutcome, RiskLevel
+from app.schemas.analysis import FinalOutcome, ReasonCode, RiskLevel
 
 
 class DecisionEngine:
@@ -28,6 +35,43 @@ class DecisionEngine:
 
     def __init__(self, calibrated: bool = True):
         self.calibrated = calibrated
+
+    @staticmethod
+    def _classify_acoustic(spoof: dict[str, Any] | None) -> str:
+        """Classify raw acoustic evidence into FAKE, GENUINE, or UNAVAILABLE."""
+        if not spoof or not isinstance(spoof, dict):
+            return "UNAVAILABLE"
+        status = str(spoof.get("status", "")).lower().strip()
+        if status != "success":
+            return "UNAVAILABLE"
+        raw_pred = spoof.get("prediction")
+        if not raw_pred:
+            return "UNAVAILABLE"
+        pred = str(raw_pred).upper().strip()
+        if pred == "FAKE":
+            return "FAKE"
+        if pred == "GENUINE":
+            return "GENUINE"
+        return "UNAVAILABLE"
+
+    @staticmethod
+    def _classify_rias(risk: dict[str, Any] | None) -> str:
+        """Classify raw RIAS risk evidence into LOW, MEDIUM, HIGH, UNAVAILABLE, or INVALID."""
+        if not risk or not isinstance(risk, dict):
+            return "UNAVAILABLE"
+        status = str(risk.get("status", "")).lower().strip()
+        if status != "success":
+            return "UNAVAILABLE"
+        raw_risk = risk.get("risk_level")
+        if raw_risk is None:
+            return "INVALID"
+        if isinstance(raw_risk, RiskLevel):
+            risk_str = raw_risk.value
+        else:
+            risk_str = str(raw_risk).upper().strip()
+        if risk_str in {RiskLevel.LOW.value, RiskLevel.MEDIUM.value, RiskLevel.HIGH.value}:
+            return risk_str
+        return "INVALID"
 
     def decide(
         self,
@@ -43,65 +87,52 @@ class DecisionEngine:
         Returns:
             tuple[FinalOutcome, str]: (final_outcome, reason_code)
         """
-        spoof = spoof_res or {}
-        risk = risk_res or {}
+        acoustic = self._classify_acoustic(spoof_res)
+        rias = self._classify_rias(risk_res)
 
-        spoof_status = spoof.get("status")
-        raw_pred = spoof.get("prediction")
-        prediction = str(raw_pred).upper().strip() if raw_pred else None
+        # PRIORITY 1: Acoustic FAKE
+        # Absolute precedence: spoof evidence must never be downgraded by RIAS
+        if acoustic == "FAKE":
+            return FinalOutcome.FAKE, ReasonCode.ACOUSTIC_SPOOF_DETECTED.value
 
-        risk_status = risk.get("status")
-        raw_risk = risk.get("risk_level")
-        risk_level_val = (
-            raw_risk.value
-            if isinstance(raw_risk, RiskLevel)
-            else (str(raw_risk).upper().strip() if raw_risk else None)
-        )
+        # PRIORITY 2: RIAS HIGH
+        # High conversational/semantic risk overrides GENUINE or UNAVAILABLE acoustic evidence
+        if rias == "HIGH":
+            return FinalOutcome.SUSPICIOUS, ReasonCode.HIGH_RIAS_OVERRIDE.value
 
-        # RULE H: Validate semantic risk validity if reported success
-        if risk_status == "success":
-            valid_risk_levels = {r.value for r in RiskLevel}
-            if risk_level_val not in valid_risk_levels:
-                return FinalOutcome.INCONCLUSIVE, "INVALID_RIAS_RISK_LEVEL"
+        # PRIORITY 3: RIAS INVALID
+        # Invalid risk data must never be defaulted to LOW or treated as authentic
+        if rias == "INVALID":
+            return FinalOutcome.INCONCLUSIVE, ReasonCode.INVALID_RIAS_RISK_LEVEL.value
 
-        # Check acoustic validity
-        acoustic_ok = spoof_status == "success" and prediction in {"FAKE", "GENUINE"}
-
-        # RULE A & D: Acoustic FAKE priority
-        # When acoustic detector returns a valid FAKE classification,
-        # spoof evidence must not be downgraded because RIAS reports LOW or HIGH.
-        if acoustic_ok and prediction == "FAKE":
-            return FinalOutcome.FAKE, "ACOUSTIC_SPOOF_DETECTED"
-
-        # RULE C & E: HIGH RIAS Override
-        # If RIAS is HIGH, and acoustic is either GENUINE or UNAVAILABLE, outcome is SUSPICIOUS.
-        if risk_status == "success" and risk_level_val == RiskLevel.HIGH.value:
-            return FinalOutcome.SUSPICIOUS, "HIGH_RIAS_OVERRIDE"
-
-        # Optional uncalibrated legacy flag check
-        if not self.calibrated and acoustic_ok and risk_status == "success":
-            return FinalOutcome.INCONCLUSIVE, "TCED_CALIBRATION_TBD"
-
-        # RULE B: Acoustic GENUINE + RIAS LOW/MEDIUM
+        # Uncalibrated engine check (for pre-calibration staging environments)
         if (
-            acoustic_ok
-            and prediction == "GENUINE"
-            and risk_status == "success"
-            and risk_level_val in {RiskLevel.LOW.value, RiskLevel.MEDIUM.value}
+            not self.calibrated
+            and acoustic == "GENUINE"
+            and rias in {"LOW", "MEDIUM"}
         ):
-            return FinalOutcome.GENUINE, "ACOUSTIC_GENUINE_CONFIRMED"
+            return FinalOutcome.INCONCLUSIVE, ReasonCode.TCED_CALIBRATION_TBD.value
 
-        # RULE G: Both evidence sources unavailable
-        risk_ok = risk_status == "success" and risk_level_val in {
-            RiskLevel.LOW.value,
-            RiskLevel.MEDIUM.value,
-        }
-        if not acoustic_ok and not risk_ok:
-            return FinalOutcome.INCONCLUSIVE, "INSUFFICIENT_EVIDENCE"
+        # PRIORITY 4: Confirmed GENUINE
+        # Only Acoustic GENUINE + RIAS LOW is allowed to produce GENUINE
+        if acoustic == "GENUINE" and rias == "LOW":
+            return FinalOutcome.GENUINE, ReasonCode.ACOUSTIC_GENUINE_CONFIRMED.value
 
-        # RULE F: Acoustic detector UNAVAILABLE + RIAS LOW (or partial evidence)
-        # LOW semantic risk is not proof of authentic speech.
-        return FinalOutcome.INCONCLUSIVE, "ACOUSTIC_EVIDENCE_UNAVAILABLE"
+        # PRIORITY 5: Remaining combinations (All yield INCONCLUSIVE)
+        if acoustic == "GENUINE":
+            if rias == "MEDIUM":
+                return FinalOutcome.INCONCLUSIVE, ReasonCode.EVIDENCE_CONFLICT.value
+            if rias == "UNAVAILABLE":
+                return FinalOutcome.INCONCLUSIVE, ReasonCode.RIAS_EVIDENCE_UNAVAILABLE.value
+
+        if acoustic == "UNAVAILABLE":
+            if rias == "LOW":
+                return FinalOutcome.INCONCLUSIVE, ReasonCode.ACOUSTIC_EVIDENCE_UNAVAILABLE.value
+            if rias in {"MEDIUM", "UNAVAILABLE"}:
+                return FinalOutcome.INCONCLUSIVE, ReasonCode.INSUFFICIENT_EVIDENCE.value
+
+        # Unreachable fail-safe
+        return FinalOutcome.INCONCLUSIVE, ReasonCode.INSUFFICIENT_EVIDENCE.value
 
 
 decision_engine = DecisionEngine(calibrated=True)

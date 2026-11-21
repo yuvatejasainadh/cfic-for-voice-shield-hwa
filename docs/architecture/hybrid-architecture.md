@@ -104,12 +104,37 @@ The system is strictly divided into two decoupled subsystems:
 
 ---
 
-## 3. Decision Engine & Locked Safety Rules
+## 3. Decision Engine & Locked Safety Rules (TCED Complete Policy)
 
-The Decision Engine (`api-gateway/app/orchestration/decision_engine.py`) enforces strict safety guarantees (Rules A-H):
-1. **Rule A & D (Acoustic Spoof Priority):** Acoustic `FAKE` always returns `FAKE` (`ACOUSTIC_SPOOF_DETECTED`). Acoustic spoof evidence is never downgraded by RIAS reporting `LOW` or `HIGH`.
-2. **Rule C & E (High Risk Override):** When acoustic detection returns `GENUINE` or is unavailable, but RIAS returns `HIGH`, the final outcome is `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`).
-3. **Rule B (Dual Authentic Evidence):** When acoustic returns `GENUINE` and RIAS returns `LOW` or `MEDIUM`, the outcome is `GENUINE` (`ACOUSTIC_GENUINE_CONFIRMED`).
-4. **Rule F (Acoustic Unavailable + RIAS Low):** When acoustic detector is unavailable and RIAS returns `LOW`, the outcome is `INCONCLUSIVE` (`ACOUSTIC_EVIDENCE_UNAVAILABLE`). Low semantic risk is not proof of authentic speech.
-5. **Rule G (Insufficient Evidence):** If both evidence sources fail/are unavailable, return `INCONCLUSIVE` (`INSUFFICIENT_EVIDENCE`).
-6. **Rule H (Invalid Risk Guard):** Malformed or unrecognized risk levels immediately trigger `INCONCLUSIVE` (`INVALID_RIAS_RISK_LEVEL`).
+The Decision Engine (`api-gateway/app/orchestration/decision_engine.py`) enforces strict safety guarantees across an authoritative 15-combination matrix:
+
+### Authoritative 15-Combination Decision Matrix
+
+| Acoustic | RIAS | Final Outcome | Reason Code |
+| :--- | :--- | :--- | :--- |
+| **FAKE** | **LOW** | `FAKE` | `ACOUSTIC_SPOOF_DETECTED` |
+| **FAKE** | **MEDIUM** | `FAKE` | `ACOUSTIC_SPOOF_DETECTED` |
+| **FAKE** | **HIGH** | `FAKE` | `ACOUSTIC_SPOOF_DETECTED` |
+| **FAKE** | **UNAVAILABLE** | `FAKE` | `ACOUSTIC_SPOOF_DETECTED` |
+| **FAKE** | **INVALID** | `FAKE` | `ACOUSTIC_SPOOF_DETECTED` |
+| **GENUINE** | **LOW** | `GENUINE` | `ACOUSTIC_GENUINE_CONFIRMED` |
+| **GENUINE** | **MEDIUM** | `INCONCLUSIVE` | `EVIDENCE_CONFLICT` |
+| **GENUINE** | **HIGH** | `SUSPICIOUS` | `HIGH_RIAS_OVERRIDE` |
+| **GENUINE** | **UNAVAILABLE** | `INCONCLUSIVE` | `RIAS_EVIDENCE_UNAVAILABLE` |
+| **GENUINE** | **INVALID** | `INCONCLUSIVE` | `INVALID_RIAS_RISK_LEVEL` |
+| **UNAVAILABLE** | **LOW** | `INCONCLUSIVE` | `ACOUSTIC_EVIDENCE_UNAVAILABLE` |
+| **UNAVAILABLE** | **MEDIUM** | `INCONCLUSIVE` | `INSUFFICIENT_EVIDENCE` |
+| **UNAVAILABLE** | **HIGH** | `SUSPICIOUS` | `HIGH_RIAS_OVERRIDE` |
+| **UNAVAILABLE** | **UNAVAILABLE** | `INCONCLUSIVE` | `INSUFFICIENT_EVIDENCE` |
+| **UNAVAILABLE** | **INVALID** | `INCONCLUSIVE` | `INVALID_RIAS_RISK_LEVEL` |
+
+### Core Decision Priorities
+1. **Priority 1 (Acoustic Spoof Priority):** Acoustic `FAKE` takes absolute precedence (`FAKE`, `ACOUSTIC_SPOOF_DETECTED`) over all RIAS states (`LOW`, `MEDIUM`, `HIGH`, `UNAVAILABLE`, `INVALID`). Acoustic spoof evidence is never downgraded.
+2. **Priority 2 (High Risk Override):** When acoustic detection returns `GENUINE` or `UNAVAILABLE`, but RIAS returns `HIGH`, the final outcome is `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`).
+3. **Priority 3 (Invalid Risk Guard):** When acoustic is not `FAKE` and RIAS returns an invalid or unrecognized risk level, the outcome is `INCONCLUSIVE` (`INVALID_RIAS_RISK_LEVEL`). Malformed data is never silently treated as low risk.
+4. **Priority 4 (Confirmed GENUINE):** `GENUINE` is exclusively produced by `Acoustic GENUINE + RIAS LOW` (`ACOUSTIC_GENUINE_CONFIRMED`).
+5. **Priority 5 (Remaining Evidence Handling):**
+   - `GENUINE + MEDIUM` returns `INCONCLUSIVE` (`EVIDENCE_CONFLICT`). Medium risk conversational anomalies preclude declaring authentic genuine.
+   - `GENUINE + UNAVAILABLE` returns `INCONCLUSIVE` (`RIAS_EVIDENCE_UNAVAILABLE`). Missing semantic risk prevents silent genuine pass-through.
+   - `UNAVAILABLE + LOW` returns `INCONCLUSIVE` (`ACOUSTIC_EVIDENCE_UNAVAILABLE`). Low semantic risk is not proof of authentic speech.
+   - `UNAVAILABLE + MEDIUM/UNAVAILABLE` returns `INCONCLUSIVE` (`INSUFFICIENT_EVIDENCE`). Missing evidence cannot prove authenticity.

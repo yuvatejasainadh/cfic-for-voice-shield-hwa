@@ -82,18 +82,37 @@ Actual FAKE              28 (FN)           32 (TP)       -> Sensitivity: 53.33%
 
 ---
 
-## 5. TCED Decision Policy Verification
+## 5. TCED Decision Policy Verification (Complete 15-Combination Matrix)
 
-Every single sample evaluated through the TCED Decision Engine strictly complied with the locked decision policy:
-- **Rule F Verification:** When acoustic detection is unavailable and RIAS reports `LOW`, TCED returned `INCONCLUSIVE` with reason `ACOUSTIC_EVIDENCE_UNAVAILABLE` in 100% of cases.
-- **Rule A Verification:** When acoustic detection identified `FAKE`, TCED output `FAKE` with reason `ACOUSTIC_SPOOF_DETECTED` (never downgraded by `RIAS LOW`).
-- **Rule D Verification:** When acoustic detection identified `FAKE` and RIAS was `HIGH`, TCED output `FAKE` with reason `ACOUSTIC_SPOOF_DETECTED`.
+Every sample evaluated through the TCED Decision Engine strictly complied with the authoritative 15-combination decision matrix:
+- **Priority 1 (Acoustic FAKE Precedence):** When acoustic detection identified `FAKE`, TCED output `FAKE` with reason `ACOUSTIC_SPOOF_DETECTED` in 100% of cases, never downgraded by RIAS.
+- **Priority 2 (High Risk Override):** When acoustic is `GENUINE` or `UNAVAILABLE` and RIAS reports `HIGH`, outcome is `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`).
+- **Priority 4 (Confirmed GENUINE):** `GENUINE` is exclusively confirmed when `Acoustic GENUINE + RIAS LOW` (`ACOUSTIC_GENUINE_CONFIRMED`).
+- **Priority 5 (Conflict & Unavailability Handling):**
+  - `GENUINE + MEDIUM` returns `INCONCLUSIVE` (`EVIDENCE_CONFLICT`).
+  - `GENUINE + UNAVAILABLE` returns `INCONCLUSIVE` (`RIAS_EVIDENCE_UNAVAILABLE`).
+  - `UNAVAILABLE + LOW` returns `INCONCLUSIVE` (`ACOUSTIC_EVIDENCE_UNAVAILABLE`).
+  - `UNAVAILABLE + MEDIUM/UNAVAILABLE` returns `INCONCLUSIVE` (`INSUFFICIENT_EVIDENCE`).
 
 ---
 
-## 6. Recommendations & Integration Verdict
+## 6. Multi-Evaluation Empirical Trajectory & Known Limitations
+
+| Evaluation Suite | Sample Size | Accuracy | Precision | Recall | F1 | ROC-AUC | FNR |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **PellaV2 K12 INT8 (Previous)** | 120 | 47.50% | 46.38% | 53.33% | 0.4961 | 0.5099 | 46.67% |
+| **Original FP32 Benchmark** | 120 | **71.67%** | **80.95%** | **56.67%** | **0.6667** | **0.8483** | **43.33%** |
+| **Expanded Stratified Evaluation** | 240 | **66.67%** | **73.81%** | **51.67%** | **0.6078** | **0.7557** | **48.33%** |
+| **Live Docker Container Spot Check** | 24 | **70.83%** | **85.71%** | **50.00%** | **0.6316** | — | **50.00%** |
+
+### Known Model Limitations:
+The PellaV2 detector exhibits substantial false negatives (~45–50% FNR) on synthetic speech mixed with environmental background noise (real or synthetic backgrounds). Vocoder phase and spectral artifacts are masked by ambient acoustic energy. The model must not be claimed as standalone production-grade deepfake detection; defense-in-depth requires conversational semantic risk (RIAS) and the complete TCED fusion policy.
+
+---
+
+## 7. Recommendations & Integration Verdict
 
 ### Final Verdict: CONDITIONAL ACCEPT
 - **Rationale:** The original FP32 model provides a significant +24.17% accuracy improvement and +0.3384 ROC-AUC gain over the INT8 baseline, reducing false alarms by 45%. It achieves 93.33% accuracy on genuine speech and 87.50% accuracy on voice-dominant audio.
 - **Condition 1 (Compute Resources):** Docker container deployment must specify a minimum memory limit of 8GB (recommended 10–12GB) to accommodate the 2.32 GB checkpoint during deserialization and inference.
-- **Condition 2 (Multi-modal Safeguard):** Because background-dominant synthetic audio exhibits a 43.33% false negative rate, acoustic detection must remain part of the multi-modal TCED pipeline, where high semantic risk (RIAS) can escalate inconclusive or missed acoustic calls.
+- **Condition 2 (Multi-modal Safeguard):** Because background-dominant synthetic audio exhibits a ~50% false negative rate, acoustic detection must remain strictly paired with RIAS in the TCED complete policy, where semantic anomalies escalate calls to `EVIDENCE_CONFLICT` or `HIGH_RIAS_OVERRIDE`.

@@ -185,5 +185,51 @@ def test_tced_row7_invalid_rias_output():
     assert reason == "INVALID_RIAS_RISK_LEVEL"
 
 
+def test_tced_row8_genuine_medium_evidence_conflict():
+    """Acoustic GENUINE + RIAS MEDIUM -> INCONCLUSIVE (EVIDENCE_CONFLICT)."""
+    engine = DecisionEngine(calibrated=True)
+    outcome, reason = engine.decide(
+        {"status": "success", "prediction": "GENUINE", "score": 0.05},
+        {"status": "success", "risk_level": "MEDIUM"},
+    )
+    assert outcome == FinalOutcome.INCONCLUSIVE
+    assert outcome != FinalOutcome.GENUINE
+    assert reason == "EVIDENCE_CONFLICT"
+
+
+def test_tced_row9_genuine_unavailable_rias():
+    """Acoustic GENUINE + RIAS UNAVAILABLE -> INCONCLUSIVE (RIAS_EVIDENCE_UNAVAILABLE)."""
+    engine = DecisionEngine(calibrated=True)
+    outcome, reason = engine.decide(
+        {"status": "success", "prediction": "GENUINE", "score": 0.04},
+        {"status": "error", "risk_level": None},
+    )
+    assert outcome == FinalOutcome.INCONCLUSIVE
+    assert outcome != FinalOutcome.GENUINE
+    assert reason == "RIAS_EVIDENCE_UNAVAILABLE"
+
+
+def test_tced_row10_unavailable_medium():
+    """Acoustic UNAVAILABLE + RIAS MEDIUM -> INCONCLUSIVE (INSUFFICIENT_EVIDENCE)."""
+    engine = DecisionEngine(calibrated=True)
+    outcome, reason = engine.decide(
+        {"status": "error", "prediction": None},
+        {"status": "success", "risk_level": "MEDIUM"},
+    )
+    assert outcome == FinalOutcome.INCONCLUSIVE
+    assert reason == "INSUFFICIENT_EVIDENCE"
+
+
+def test_tced_row11_fake_invalid_absolute_override():
+    """Acoustic FAKE + RIAS INVALID -> FAKE (ACOUSTIC_SPOOF_DETECTED)."""
+    engine = DecisionEngine(calibrated=True)
+    outcome, reason = engine.decide(
+        {"status": "success", "prediction": "FAKE", "score": 0.95},
+        {"status": "success", "risk_level": "CORRUPTED_VALUE"},
+    )
+    assert outcome == FinalOutcome.FAKE
+    assert reason == "ACOUSTIC_SPOOF_DETECTED"
+
+
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

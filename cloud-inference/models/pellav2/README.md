@@ -16,6 +16,12 @@ Containerized acoustic deepfake detection service for CloudForge Intelligence Co
 - `GET /metadata` - Model parameters and configuration
 - `POST /predict` - Upload 16kHz mono WAV audio multipart form-data
 
+## Validated Performance Benchmarks & Limitations
+- **120-Sample Dataset Benchmark:** 71.67% accuracy, 80.95% precision, 56.67% recall, 0.8483 ROC-AUC, 13.33% FPR.
+- **240-Sample Expanded Benchmark:** 66.67% accuracy, 73.81% precision, 51.67% recall, 0.7557 ROC-AUC, 18.33% FPR.
+- **24-Sample Live Docker Spot Check:** 70.83% accuracy, 85.71% precision, 50.00% recall, 8.33% FPR, 50.00% FNR.
+- **Known Limitation:** PellaV2 exhibits substantial false negatives (~45–50% FNR) when synthetic speech is blended with environmental or synthetic background noise due to acoustic energy masking. It must be operated in combination with conversational risk (RIAS) and the complete TCED fusion policy.
+
 ## Running Locally
 ```bash
 uvicorn app.main:app --host 127.0.0.1 --port 8321

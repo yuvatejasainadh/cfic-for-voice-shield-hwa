@@ -62,16 +62,24 @@ python -m pytest tests/unit/test_tced.py -v -k "high_rias"
 
 ## 4. Key Test Scenarios Covered
 
-1. **Mandatory TCED Rules (Rules A-H):**
-   - Acoustic `FAKE` produces `FAKE` (`ACOUSTIC_SPOOF_DETECTED`) regardless of RIAS `LOW` or `HIGH`.
-   - Acoustic `GENUINE` + RIAS `LOW` produces `GENUINE` (`ACOUSTIC_GENUINE_CONFIRMED`).
+1. **Complete TCED 15-Combination Policy:**
+   - Acoustic `FAKE` produces `FAKE` (`ACOUSTIC_SPOOF_DETECTED`) across all RIAS states (`LOW`, `MEDIUM`, `HIGH`, `UNAVAILABLE`, `INVALID`).
+   - Acoustic `GENUINE` + RIAS `LOW` exclusively produces `GENUINE` (`ACOUSTIC_GENUINE_CONFIRMED`).
+   - Acoustic `GENUINE` + RIAS `MEDIUM` produces `INCONCLUSIVE` (`EVIDENCE_CONFLICT`).
    - Acoustic `GENUINE` + RIAS `HIGH` produces `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`).
-   - Acoustic unavailable + RIAS `HIGH` produces `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`).
-   - Acoustic unavailable + RIAS `LOW` produces `INCONCLUSIVE` (`ACOUSTIC_EVIDENCE_UNAVAILABLE`).
-2. **Failure Handling:**
+   - Acoustic `GENUINE` + RIAS `UNAVAILABLE` produces `INCONCLUSIVE` (`RIAS_EVIDENCE_UNAVAILABLE`).
+   - Acoustic `GENUINE` + RIAS `INVALID` produces `INCONCLUSIVE` (`INVALID_RIAS_RISK_LEVEL`).
+   - Acoustic `UNAVAILABLE` + RIAS `LOW` produces `INCONCLUSIVE` (`ACOUSTIC_EVIDENCE_UNAVAILABLE`).
+   - Acoustic `UNAVAILABLE` + RIAS `MEDIUM` produces `INCONCLUSIVE` (`INSUFFICIENT_EVIDENCE`).
+   - Acoustic `UNAVAILABLE` + RIAS `HIGH` produces `SUSPICIOUS` (`HIGH_RIAS_OVERRIDE`).
+   - Acoustic `UNAVAILABLE` + RIAS `UNAVAILABLE` produces `INCONCLUSIVE` (`INSUFFICIENT_EVIDENCE`).
+   - Acoustic `UNAVAILABLE` + RIAS `INVALID` produces `INCONCLUSIVE` (`INVALID_RIAS_RISK_LEVEL`).
+2. **Failure Handling & Edge Cases:**
    - Both paths fail -> `INCONCLUSIVE` (reason: `INSUFFICIENT_EVIDENCE`).
    - Missing/unavailable acoustic evidence -> `INCONCLUSIVE` (reason: `ACOUSTIC_EVIDENCE_UNAVAILABLE`).
+   - Missing/unavailable RIAS evidence on authentic audio -> `INCONCLUSIVE` (reason: `RIAS_EVIDENCE_UNAVAILABLE`).
    - Unrecognized RIAS risk level -> `INCONCLUSIVE` (reason: `INVALID_RIAS_RISK_LEVEL`, never defaults to `LOW`).
+   - None, empty dictionaries, and malformed inputs handled safely without exceptions.
 3. **Gateway Protection:**
    - Missing or invalid `X-API-Key` returns `401 Unauthorized`.
    - Empty audio payload returns `400 Bad Request`.
