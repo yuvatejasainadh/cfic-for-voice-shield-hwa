@@ -1,8 +1,9 @@
 """Audio validation, ingestion, chunking, and storage service for API Gateway."""
 
+import io
 import os
 import uuid
-from typing import BinaryIO
+from typing import Any, BinaryIO, List
 from fastapi import UploadFile
 from app.core.config import settings
 from app.core.errors import AudioPayloadTooLargeException, EmptyAudioPayloadException
@@ -59,7 +60,9 @@ class AudioService:
             f.write(audio_bytes)
         return dest_path
 
-    def plan_5s_chunks(self, duration_seconds: float, window_seconds: float = 5.0, overlap_seconds: float = 0.5) -> list[dict[str, float]]:
+    def plan_5s_chunks(
+        self, duration_seconds: float, window_seconds: float = 5.0, overlap_seconds: float = 0.5
+    ) -> list[dict[str, float]]:
         """Calculate start and end time boundaries for 5-second windowed chunk orchestration."""
         chunks = []
         if duration_seconds <= 0:
@@ -79,6 +82,114 @@ class AudioService:
                 break
             start += step
         return chunks
+
+    def slice_into_5s_chunks(
+        self,
+        audio_bytes: bytes,
+        filename: str = "audio.wav",
+        content_type: str = "audio/wav",
+        chunk_duration_s: float = 5.0,
+    ) -> List[dict[str, Any]]:
+        """Slice audio bytes into sequential 5-second WAV chunks.
+
+        If total duration <= chunk_duration_s, returns a single chunk.
+        Falls back safely to raw bytes if audio decoding is unsupported or payload is mock.
+        """
+        # Try decoding with soundfile (supports WAV, MP3, FLAC, OGG)
+        try:
+            import soundfile as sf
+            with io.BytesIO(audio_bytes) as bio:
+                audio, sr = sf.read(bio, dtype="float32")
+            if audio is not None and audio.size > 0:
+                if audio.ndim > 1:
+                    audio = audio.mean(axis=-1)
+                total_duration = float(len(audio) / sr)
+
+                if total_duration <= chunk_duration_s:
+                    return [{
+                        "chunk_index": 0,
+                        "start_seconds": 0.0,
+                        "end_seconds": round(total_duration, 3),
+                        "audio_bytes": audio_bytes,
+                        "filename": filename,
+                        "content_type": content_type,
+                    }]
+
+                chunk_samples = int(chunk_duration_s * sr)
+                chunks = []
+                for i, start_idx in enumerate(range(0, len(audio), chunk_samples)):
+                    chunk_audio = audio[start_idx : start_idx + chunk_samples]
+                    buf = io.BytesIO()
+                    sf.write(buf, chunk_audio, sr, format="WAV", subtype="PCM_16")
+                    start_s = round(start_idx / sr, 3)
+                    end_s = round((start_idx + len(chunk_audio)) / sr, 3)
+                    chunks.append({
+                        "chunk_index": i,
+                        "start_seconds": start_s,
+                        "end_seconds": end_s,
+                        "audio_bytes": buf.getvalue(),
+                        "filename": f"chunk_{i}.wav",
+                        "content_type": "audio/wav",
+                    })
+                return chunks
+        except Exception:
+            pass
+
+        # Try standard library wave module
+        try:
+            import wave
+            with io.BytesIO(audio_bytes) as bio:
+                with wave.open(bio, "rb") as wf:
+                    sr = wf.getframerate()
+                    n_frames = wf.getnframes()
+                    n_channels = wf.getnchannels()
+                    sampwidth = wf.getsampwidth()
+                    total_duration = float(n_frames / sr)
+
+                    if total_duration <= chunk_duration_s:
+                        return [{
+                            "chunk_index": 0,
+                            "start_seconds": 0.0,
+                            "end_seconds": round(total_duration, 3),
+                            "audio_bytes": audio_bytes,
+                            "filename": filename,
+                            "content_type": content_type,
+                        }]
+
+                    chunk_frames = int(chunk_duration_s * sr)
+                    chunks = []
+                    for i, start_f in enumerate(range(0, n_frames, chunk_frames)):
+                        wf.setpos(start_f)
+                        frames = wf.readframes(chunk_frames)
+                        buf = io.BytesIO()
+                        with wave.open(buf, "wb") as out_wf:
+                            out_wf.setnchannels(n_channels)
+                            out_wf.setsampwidth(sampwidth)
+                            out_wf.setframerate(sr)
+                            out_wf.writeframes(frames)
+                        start_s = round(start_f / sr, 3)
+                        end_s = round(min(n_frames, start_f + chunk_frames) / sr, 3)
+                        chunks.append({
+                            "chunk_index": i,
+                            "start_seconds": start_s,
+                            "end_seconds": end_s,
+                            "audio_bytes": buf.getvalue(),
+                            "filename": f"chunk_{i}.wav",
+                            "content_type": "audio/wav",
+                        })
+                    return chunks
+        except Exception:
+            pass
+
+        # Fallback: single chunk with original bytes
+        return [{
+            "chunk_index": 0,
+            "start_seconds": 0.0,
+            "end_seconds": chunk_duration_s,
+            "audio_bytes": audio_bytes,
+            "filename": filename,
+            "content_type": content_type,
+        }]
 
 
 audio_service = AudioService()

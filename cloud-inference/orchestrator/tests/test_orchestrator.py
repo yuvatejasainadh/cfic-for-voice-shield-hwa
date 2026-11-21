@@ -13,18 +13,23 @@ def test_language_router_selection():
     # English routes to English ASR
     url, lang = language_router.select_asr_endpoint("en")
     assert lang == "en"
+    assert url is not None
 
     # Telugu routes to Telugu IndicConformer
     url, lang = language_router.select_asr_endpoint("te")
     assert lang == "te"
+    assert url is not None
 
     # Hindi routes to Hindi IndicConformer
     url, lang = language_router.select_asr_endpoint("hi")
     assert lang == "hi"
+    assert url is not None
 
-    # South Indian cluster fallback
-    url, lang = language_router.select_asr_endpoint("ta")
-    assert lang == "ta"
+    # Unsupported languages return None for ASR endpoint (no silent substitution)
+    for unsupported in ["ta", "kn", "ml", "mr", "bn", "gu", "pa", "as", "mni", "fr", "de", "es", "zh", "unknown"]:
+        url, lang = language_router.select_asr_endpoint(unsupported)
+        assert url is None
+        assert lang == unsupported
 
 
 def test_spoof_selector():
@@ -207,6 +212,48 @@ async def test_inference_pipeline_low_confidence_lid_skips_asr():
             assert res_data["rias"]["status"] == "skipped"
             assert res_data["rias"]["risk_level"] == "INCONCLUSIVE"
             # Verify ASR and RIAS were NOT called
+            mock_asr_call.assert_not_called()
+            mock_rias_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_inference_pipeline_unsupported_language_skips_asr_and_rias():
+    mock_lid = {
+        "status": "success",
+        "language": "as",
+        "raw_label": "as-IN",
+        "confidence": 0.98,
+        "model_id": "onecxi/open-vakgyata",
+        "retries_used": 0,
+        "latency_ms": 110.0,
+    }
+    mock_spoof = {
+        "status": "success",
+        "prediction": "GENUINE",
+        "score": 0.05,
+        "model_version": "aasist-fallback",
+        "latency_ms": 100.0,
+    }
+    mock_asr_call = AsyncMock()
+    mock_rias_call = AsyncMock()
+
+    with patch("app.api.routes.lid_client.identify", new=AsyncMock(return_value=mock_lid)), \
+         patch("app.api.routes.asr_client.transcribe", new=mock_asr_call), \
+         patch("app.api.routes.spoof_client.predict", new=AsyncMock(return_value=mock_spoof)), \
+         patch("app.api.routes.rias_client.assess", new=mock_rias_call):
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            files = {"file": ("chunk.wav", b"dummy-audio-content", "audio/wav")}
+            res = await ac.post("/v1/inference", files=files)
+
+            assert res.status_code == 200
+            res_data = res.json()
+            assert res_data["status"] == "inconclusive"
+            assert res_data["lid"]["language"] == "as"
+            assert res_data["transcription"]["status"] == "unsupported_language"
+            assert res_data["transcription"]["error"] == "Language 'as' is not supported by ASR services"
+            assert res_data["rias"]["status"] == "skipped"
+            assert res_data["rias"]["risk_level"] == "INCONCLUSIVE"
             mock_asr_call.assert_not_called()
             mock_rias_call.assert_not_called()
 

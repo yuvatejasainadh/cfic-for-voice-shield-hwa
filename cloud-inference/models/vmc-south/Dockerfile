@@ -10,8 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir fastapi uvicorn pydantic python-multipart soundfile
 
+RUN mkdir -p /app/weights
+
 COPY models/vmc-south/app ./app
-COPY models/vmc-south/weights ./weights
 
 EXPOSE 8321
 

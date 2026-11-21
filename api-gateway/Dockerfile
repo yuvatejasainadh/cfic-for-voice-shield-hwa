@@ -2,8 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install curl for health checks
+# Install libsndfile and curl for audio decoding and health checks
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsndfile1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

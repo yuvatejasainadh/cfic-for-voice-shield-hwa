@@ -26,7 +26,7 @@ WEIGHTS_DIR = os.getenv("ASR_EN_WEIGHTS_DIR", "weights")
 USE_MOCK = os.getenv("ASR_EN_USE_MOCK", "false").lower() == "true"
 FORCE_DEVICE = os.getenv("ASR_EN_DEVICE", "auto").lower()
 SILENCE_RMS_THRESHOLD = float(os.getenv("ASR_EN_SILENCE_RMS_THRESHOLD", "0.002"))
-MAX_NEW_TOKENS = int(os.getenv("ASR_EN_MAX_NEW_TOKENS", "448"))
+MAX_NEW_TOKENS = int(os.getenv("ASR_EN_MAX_NEW_TOKENS", "256"))
 BEAM_SIZE = int(os.getenv("ASR_EN_BEAM_SIZE", "1"))
 
 # In-memory runtime state

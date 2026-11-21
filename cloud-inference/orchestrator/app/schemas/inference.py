@@ -24,11 +24,12 @@ class LIDResult(BaseModel):
 
 
 class ASRResult(BaseModel):
-    status: str = Field(default="success", description="'success', 'skipped', or 'error'")
+    status: str = Field(default="success", description="'success', 'skipped', 'unsupported_language', or 'error'")
     text: Optional[str] = Field(default=None, description="Decoded transcript text")
     language: str = Field(default="en", description="Decoded language")
     model_id: Optional[str] = Field(default="openai/whisper-base.en")
     model_revision: Optional[str] = Field(default=None)
+    error: Optional[str] = Field(default=None, description="Error message or skip reason")
     latency_ms: float = Field(default=0.0)
 
 

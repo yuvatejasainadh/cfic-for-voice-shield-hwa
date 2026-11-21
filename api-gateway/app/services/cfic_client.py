@@ -24,14 +24,18 @@ class CFICInferenceClient:
         filename: str = "audio.wav",
         content_type: str = "audio/wav",
         request_id: str | None = None,
+        chunk_index: int = 0,
+        timestamp_start_s: float = 0.0,
+        timestamp_end_s: float = 5.0,
     ) -> dict[str, Any]:
-        """Dispatch audio to Cloud Inference Orchestrator for full model processing.
+        """Dispatch audio chunk to Cloud Inference Orchestrator for full model processing.
         
         Returns unified dictionary with:
-        - status: 'success' | 'error' | 'timeout' | 'not_configured'
+        - status: 'success' | 'inconclusive' | 'error' | 'timeout' | 'not_configured'
         - spoof: {'prediction': str, 'score': float, 'model': str, 'status': str, 'latency_ms': float}
         - transcription: {'text': str, 'language': str, 'model': str, 'status': str, 'latency_ms': float}
         - lid: {'language': str, 'confidence': float}
+        - rias: {'risk_level': str, 'status': str, 'failure_reason': str, 'latency_ms': float}
         - latency_ms: float
         """
         start = time.perf_counter()
@@ -43,25 +47,33 @@ class CFICInferenceClient:
                 "spoof": {"status": "not_configured", "prediction": None, "score": None, "latency_ms": 0.0},
                 "transcription": {"status": "not_configured", "text": None, "language": None, "latency_ms": 0.0},
                 "lid": {"status": "not_configured", "language": None},
+                "rias": {"status": "not_configured", "risk_level": "INCONCLUSIVE", "latency_ms": 0.0},
                 "latency_ms": 0.0,
             }
 
         endpoint = f"{self.base_url}/v1/inference"
         files = {"file": (filename, audio, content_type)}
+        form_data = {
+            "session_id": request_id or "",
+            "chunk_index": str(chunk_index),
+            "timestamp_start_s": str(timestamp_start_s),
+            "timestamp_end_s": str(timestamp_end_s),
+        }
         headers = {"X-Request-ID": request_id} if request_id else {}
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(endpoint, files=files, headers=headers)
+                resp = await client.post(endpoint, files=files, data=form_data, headers=headers)
                 elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
 
                 if resp.status_code != 200:
                     return {
                         "status": "error",
-                        "error": f"Cloud inference returned HTTP {resp.status_code}",
+                        "error": f"Cloud inference returned HTTP {resp.status_code}: {resp.text[:100]}",
                         "spoof": {"status": "error", "prediction": None, "score": None, "latency_ms": elapsed_ms},
                         "transcription": {"status": "error", "text": None, "language": None, "latency_ms": elapsed_ms},
                         "lid": {"status": "error", "language": None},
+                        "rias": {"status": "error", "risk_level": "INCONCLUSIVE", "latency_ms": elapsed_ms},
                         "latency_ms": elapsed_ms,
                     }
 
@@ -76,6 +88,7 @@ class CFICInferenceClient:
                 "spoof": {"status": "timeout", "prediction": None, "score": None, "latency_ms": elapsed_ms},
                 "transcription": {"status": "timeout", "text": None, "language": None, "latency_ms": elapsed_ms},
                 "lid": {"status": "timeout", "language": None},
+                "rias": {"status": "timeout", "risk_level": "INCONCLUSIVE", "latency_ms": elapsed_ms},
                 "latency_ms": elapsed_ms,
             }
         except Exception as exc:
@@ -86,6 +99,7 @@ class CFICInferenceClient:
                 "spoof": {"status": "error", "prediction": None, "score": None, "latency_ms": elapsed_ms},
                 "transcription": {"status": "error", "text": None, "language": None, "latency_ms": elapsed_ms},
                 "lid": {"status": "error", "language": None},
+                "rias": {"status": "error", "risk_level": "INCONCLUSIVE", "latency_ms": elapsed_ms},
                 "latency_ms": elapsed_ms,
             }
 

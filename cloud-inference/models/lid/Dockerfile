@@ -18,7 +18,6 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser \
     && chown -R appuser:appuser /app /home/appuser
 
 COPY --chown=appuser:appuser models/lid/app ./app
-COPY --chown=appuser:appuser models/lid/weights ./weights
 
 USER appuser
 
