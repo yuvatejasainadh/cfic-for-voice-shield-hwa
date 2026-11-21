@@ -1,4 +1,4 @@
-"""FastAPI Microservice for PellaV2 K12 INT8 Acoustic Deepfake Detection."""
+"""FastAPI Microservice for Original PellaV2 Acoustic Deepfake Detection."""
 
 import hashlib
 import io
@@ -15,7 +15,11 @@ import torch
 
 try:
     from app.config import settings
-    from app.model import PellaV2Model, extract_160_log_mel_features, load_pellav2_checkpoint
+    from app.model import (
+        PellaV2OriginalDetector,
+        preprocess_audio,
+        load_original_pellav2_checkpoint,
+    )
     from app.schemas import (
         ReadinessResponse,
         SpoofHealthResponse,
@@ -24,7 +28,11 @@ try:
     )
 except ImportError:
     from config import settings
-    from model import PellaV2Model, extract_160_log_mel_features, load_pellav2_checkpoint
+    from model import (
+        PellaV2OriginalDetector,
+        preprocess_audio,
+        load_original_pellav2_checkpoint,
+    )
     from schemas import (
         ReadinessResponse,
         SpoofHealthResponse,
@@ -90,14 +98,18 @@ def _load_runtime_model():
         logger.warning("Checksum verification failed or checksum metadata unverified. Loading safely with inspection.")
 
     try:
-        logger.info(f"Loading PellaV2 K12 INT8 weights from {settings.model_path}...")
+        logger.info(f"Loading original PellaV2 weights from {settings.model_path}...")
         t0 = time.perf_counter()
-        model = load_pellav2_checkpoint(settings.model_path, settings.calibration_path)
+        model = load_original_pellav2_checkpoint(
+            weights_path=settings.model_path,
+            config_path=settings.config_path,
+            device=settings.device,
+        )
         load_time_ms = round((time.perf_counter() - t0) * 1000, 2)
         _runtime["model"] = model
         _runtime["loaded"] = True
         _runtime["error"] = None
-        logger.info(f"PellaV2 model ready for inference (cold load: {load_time_ms} ms).")
+        logger.info(f"PellaV2 original model ready for inference (cold load: {load_time_ms} ms).")
     except Exception as exc:
         _runtime["loaded"] = False
         _runtime["error"] = str(exc)
@@ -116,9 +128,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="PellaV2 K12 INT8 Acoustic Deepfake Detection Service",
+    title="PellaV2 Audio Deepfake Detection Service",
     version="1.0.0",
-    description="Containerized INT8 dynamic quantized acoustic deepfake detection service for CFIC x VoiceShield",
+    description="Containerized acoustic deepfake detection service for CFIC x VoiceShield using Sadanie/pellav2-audio-deepfake-detector",
     lifespan=lifespan,
 )
 
@@ -129,7 +141,7 @@ async def health():
     return SpoofHealthResponse(
         status="ok",
         service=settings.service_name,
-        architecture="Conformer-K12-INT8",
+        architecture=settings.architecture,
         target_domain="Acoustic-Synthetic-Detection",
         model_version=settings.model_version,
         artifact_found=os.path.exists(settings.model_path),
@@ -155,21 +167,17 @@ async def ready():
 
 @app.get("/metadata", response_model=SpoofMetadataResponse, tags=["System"])
 async def metadata():
-    """Model card metadata and calibrated configuration."""
-    cal_params = {}
-    if _runtime["model"] is not None:
-        cal_params = {"a": _runtime["model"].cal_a, "b": _runtime["model"].cal_b}
-
+    """Model card metadata and configuration."""
     return SpoofMetadataResponse(
         service=settings.service_name,
-        model_id="varunpadavala/cfic-pellav2-k12-int8",
+        model_id="Sadanie/pellav2-audio-deepfake-detector",
         model_version=settings.model_version,
-        architecture="Conformer-K12-1024",
-        quantization="INT8-Dynamic-Affine",
+        architecture=settings.architecture,
+        quantization="None (FP32)",
         sample_rate=settings.sample_rate,
         feature_dim=160,
         threshold=settings.threshold,
-        calibration_parameters=cal_params,
+        calibration_parameters={},
     )
 
 
@@ -230,21 +238,14 @@ async def predict(file: UploadFile = File(..., description="Audio payload (16 kH
 
     # Feature extraction & Model Forward Pass
     try:
-        features = extract_160_log_mel_features(
-            audio=wav,
-            sample_rate=sr,
-            target_sample_rate=settings.sample_rate,
-            n_mels=160,
-        )
+        input_tensor = preprocess_audio(wav, sr).to(_runtime["device"])
 
         with torch.no_grad():
-            logit, calibrated_score = _runtime["model"](features)
+            logit = _runtime["model"](input_tensor)
+            prob = float(torch.sigmoid(logit).item())
 
-        score_val = float(calibrated_score.item())
-        # Enforce valid probability bounds [0.0, 1.0]
-        score_val = max(0.0, min(1.0, score_val))
+        score_val = max(0.0, min(1.0, prob))
 
-        # Prediction polarity: score >= threshold indicates synthetic/fake voice
         verdict = "FAKE" if score_val >= settings.threshold else "GENUINE"
         elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
 

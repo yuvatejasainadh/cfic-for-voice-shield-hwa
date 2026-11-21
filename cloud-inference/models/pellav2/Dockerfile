@@ -25,9 +25,9 @@ EXPOSE 8321
 
 ENV PYTHONUNBUFFERED=1 \
     HF_HOME=/home/appuser/.cache/huggingface \
-    PELLAV2_MODEL_PATH=/app/weights/pellav2_k12_int8_final.pt \
-    PELLAV2_CALIBRATION_PATH=/app/config/k12_calibration.json \
-    PELLAV2_MODEL_VERSION=pellav2-k12-int8 \
+    PELLAV2_MODEL_PATH=/app/weights/pellav2_detector.pt \
+    PELLAV2_CONFIG_PATH=/app/config/w2v_bert_config.json \
+    PELLAV2_MODEL_VERSION=pellav2-original \
     PELLAV2_USE_MOCK=false \
     PELLAV2_DEVICE=cpu \
     PELLAV2_THRESHOLD=0.50

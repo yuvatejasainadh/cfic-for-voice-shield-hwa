@@ -1,0 +1,112 @@
+{
+  "evaluation_timestamp": "2026-11-21T07:14:18Z",
+  "dataset": {
+    "path": "C:\\Users\\yuvat\\Music\\Deepfake Dataset",
+    "total_samples_evaluated": 120,
+    "fake_samples": 60,
+    "genuine_samples": 60,
+    "audio_duration_sec": 4.0,
+    "sample_rate": 16000
+  },
+  "model": {
+    "service": "model-pellav2",
+    "version": "pellav2-original",
+    "model_id": "Sadanie/pellav2-audio-deepfake-detector",
+    "architecture": "PellaV2-w2v-bert-2.0",
+    "threshold": 0.5,
+    "quantization": "None (FP32)"
+  },
+  "classification_metrics": {
+    "accuracy": 0.7167,
+    "precision": 0.8095,
+    "recall": 0.5667,
+    "f1_score": 0.6667,
+    "roc_auc": 0.8483,
+    "false_positive_rate": 0.1333,
+    "false_negative_rate": 0.4333,
+    "confusion_matrix": {
+      "true_positives": 34,
+      "false_positives": 8,
+      "true_negatives": 52,
+      "false_negatives": 26
+    }
+  },
+  "latency_metrics": {
+    "mean_ms": 1986.12,
+    "median_ms": 1943.58,
+    "p95_ms": 2297.53,
+    "min_ms": 1148.97,
+    "max_ms": 3173.55,
+    "rtf": 0.4965
+  },
+  "category_breakdown": {
+    "fake_voice_fake_bg_wf_4s": {
+      "total": 30,
+      "accuracy": 0.5667,
+      "mean_score": 0.5713,
+      "tp": 17,
+      "fp": 0,
+      "tn": 0,
+      "fn": 13
+    },
+    "fake_voice_real_bg_wf_4s": {
+      "total": 30,
+      "accuracy": 0.5667,
+      "mean_score": 0.5486,
+      "tp": 17,
+      "fp": 0,
+      "tn": 0,
+      "fn": 13
+    },
+    "real_voice_fake_bg_wf_4s": {
+      "total": 30,
+      "accuracy": 0.8,
+      "mean_score": 0.2006,
+      "tp": 0,
+      "fp": 6,
+      "tn": 24,
+      "fn": 0
+    },
+    "real_voice_real_bg_wf_4s": {
+      "total": 30,
+      "accuracy": 0.9333,
+      "mean_score": 0.06,
+      "tp": 0,
+      "fp": 2,
+      "tn": 28,
+      "fn": 0
+    }
+  },
+  "condition_breakdown": {
+    "balanced": {
+      "total": 40,
+      "accuracy": 0.675,
+      "tp": 10,
+      "fp": 3,
+      "tn": 17,
+      "fn": 10
+    },
+    "bg_dominant": {
+      "total": 40,
+      "accuracy": 0.6,
+      "tp": 9,
+      "fp": 5,
+      "tn": 15,
+      "fn": 11
+    },
+    "voice_dominant": {
+      "total": 40,
+      "accuracy": 0.875,
+      "tp": 15,
+      "fp": 0,
+      "tn": 20,
+      "fn": 5
+    }
+  },
+  "tced_policy_verification": {
+    "rule_f_acoustic_unavail_rias_low_pass": true,
+    "rule_f_expected_reason": "ACOUSTIC_EVIDENCE_UNAVAILABLE",
+    "rule_a_acoustic_fake_rias_low_preserved": true,
+    "rule_d_acoustic_fake_rias_high_preserved": true
+  }
+}

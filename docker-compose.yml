@@ -116,8 +116,8 @@ services:
     container_name: cfic-model-pellav2
     environment:
       - PELLAV2_USE_MOCK=${PELLAV2_USE_MOCK:-false}
-      - PELLAV2_MODEL_PATH=/app/weights/pellav2_k12_int8_final.pt
-      - PELLAV2_CALIBRATION_PATH=/app/config/k12_calibration.json
+      - PELLAV2_MODEL_PATH=/app/weights/pellav2_detector.pt
+      - PELLAV2_CONFIG_PATH=/app/config/w2v_bert_config.json
       - PELLAV2_THRESHOLD=0.50
     volumes:
       - ./cloud-inference/models/pellav2/weights:/app/weights:ro
@@ -127,7 +127,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 8G
     networks:
       - cfic-internal-network
 

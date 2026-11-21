@@ -1,4 +1,4 @@
-"""Unit and service contract tests for PellaV2 K12 INT8 Detection Microservice."""
+"""Unit and service contract tests for Original PellaV2 Detection Microservice."""
 
 import io
 import math
@@ -17,16 +17,16 @@ if PELLAV2_APP_DIR not in sys.path:
 
 import main as pella_main
 from config import settings
-from model import extract_160_log_mel_features
+from model import PellaV2OriginalDetector, preprocess_audio
 
 REAL_WAV_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../../../../cfic-asr-benchmark/data/audio/telugu/telugu_00000.wav")
 )
 CHECKPOINT_PATH = os.path.abspath(
-    os.path.join(PELLAV2_ROOT_DIR, "weights/pellav2_k12_int8_final.pt")
+    os.path.join(PELLAV2_ROOT_DIR, "weights/pellav2_detector.pt")
 )
-CALIBRATION_PATH = os.path.abspath(
-    os.path.join(PELLAV2_ROOT_DIR, "config/k12_calibration.json")
+CONFIG_PATH = os.path.abspath(
+    os.path.join(PELLAV2_ROOT_DIR, "config/w2v_bert_config.json")
 )
 
 
@@ -49,9 +49,9 @@ def create_dummy_wav_bytes(duration_s: float = 1.0, sample_rate: int = 16000) ->
 @pytest.fixture(scope="module")
 def client():
     # Configure real model path for test suite if checkpoint exists
-    if os.path.exists(CHECKPOINT_PATH):
+    if os.path.exists(CHECKPOINT_PATH) and os.path.exists(CONFIG_PATH):
         settings.model_path = CHECKPOINT_PATH
-        settings.calibration_path = CALIBRATION_PATH
+        settings.config_path = CONFIG_PATH
         settings.use_mock = False
     else:
         settings.use_mock = True
@@ -67,7 +67,8 @@ class TestPellaV2Service:
         data = resp.json()
         assert data["status"] == "ok"
         assert data["service"] == "model-pellav2"
-        assert data["model_version"] == "pellav2-k12-int8"
+        assert data["model_version"] == "pellav2-original"
+        assert data["architecture"] == "PellaV2-w2v-bert-2.0"
         assert "artifact_found" in data
         assert "checksum_verified" in data
 
@@ -84,11 +85,12 @@ class TestPellaV2Service:
         assert resp.status_code == 200
         data = resp.json()
         assert data["service"] == "model-pellav2"
-        assert data["architecture"] == "Conformer-K12-1024"
-        assert data["quantization"] == "INT8-Dynamic-Affine"
+        assert data["architecture"] == "PellaV2-w2v-bert-2.0"
+        assert data["quantization"] == "None (FP32)"
+        assert data["model_id"] == "Sadanie/pellav2-audio-deepfake-detector"
+        assert data["model_version"] == "pellav2-original"
         assert data["feature_dim"] == 160
         assert data["threshold"] == 0.50
-        assert "calibration_parameters" in data
 
     def test_empty_audio_rejected(self, client):
         files = {"file": ("empty.wav", b"", "audio/wav")}
@@ -137,7 +139,7 @@ class TestPellaV2Service:
         assert data["prediction"] in ("GENUINE", "FAKE")
         assert 0.0 <= data["score"] <= 1.0
         assert data["threshold"] == 0.50
-        assert data["model_version"] == "pellav2-k12-int8"
+        assert data["model_version"] == "pellav2-original"
         assert data["latency_ms"] > 0.0
 
     def test_repeated_inference_stability(self, client):
@@ -164,10 +166,15 @@ class TestPellaV2Service:
         assert resp.status_code == 503
         assert "unavailable" in resp.json()["detail"].lower()
 
-    def test_feature_extraction_dimension(self):
+    def test_audio_preprocessing_pipeline(self):
         import numpy as np
         fake_audio = np.random.uniform(-0.5, 0.5, 16000 * 2).astype(np.float32)
-        feats = extract_160_log_mel_features(fake_audio, sample_rate=16000)
+        tensor = preprocess_audio(fake_audio, sr=16000)
+        assert tensor.ndim == 2
+        assert tensor.shape == (1, 64000)
+
+        feats, mask = PellaV2OriginalDetector.features(tensor)
         assert feats.ndim == 3
         assert feats.shape[0] == 1
         assert feats.shape[2] == 160
+        assert mask.shape[0] == 1

@@ -1,19 +1,25 @@
-# PellaV2 K12 INT8 Acoustic Deepfake Detector Microservice Documentation
+# PellaV2 Acoustic Deepfake Detector Microservice Documentation
 
 ## 1. Overview
 
-This document specifies the containerized, internal-only **PellaV2 K12 INT8 Acoustic Deepfake Detector** microservice within CloudForge Intelligence Core (CFIC) × VoiceShield:
-- **Locked Model Checkpoint:** `varunpadavala/cfic-pellav2-k12-int8`
-- **Target File:** `293mb/pellav2_k12_int8_final.pt`
-- **File Size:** 292,876,453 bytes (~279.31 MiB)
-- **Hugging Face Commit SHA:** `7e07beb19629efd2edd959112d2cebf57cbcfb91`
-- **SHA-256 Checksum:** `41c14cd6252fd3e94475b3277eb13b6f8fc463d5edf5b741b521f14bcfda0f98`
-- **Architecture:** 12-Layer Conformer (K12) with 1024 hidden size, 16 attention heads, 4096-dim feed-forward, depthwise convolution kernel 31, 160-dim input projection, 13-element layer weighting, and single-scalar linear classification head
-- **Quantization:** PyTorch Dynamic INT8 Quantization (`torch.ao.nn.quantized.dynamic.Linear` / `LinearPackedParams`)
-- **Calibration Method:** Platt Scaling Sigmoid: `score = 1 / (1 + exp(-(1.5635074958458532 * logit - 0.08237249469081723)))`
-- **Input Features:** 160-dimensional log-mel filterbank spectrogram (FFT 1024, hop 320, window 640 at 16,000 Hz)
-- **Output Verdict:** `FAKE` (score $\ge 0.50$) or `GENUINE` (score $< 0.50$)
-- **Execution Target:** CPU-optimized PyTorch execution (dynamic quantized linear kernels)
+This document specifies the containerized, internal-only **PellaV2 Acoustic Deepfake Detector** microservice within CloudForge Intelligence Core (CFIC) × VoiceShield:
+- **Model Checkpoint Source:** Hugging Face `Sadanie/pellav2-audio-deepfake-detector`
+- **Target File:** `weights/pellav2_detector.pt`
+- **File Size:** 2,322,248,702 bytes (~2.16 GiB)
+- **Hugging Face Commit SHA:** `94b899915ee551fa90d8844961532e4aaab58322`
+- **SHA-256 Checksum:** `d21aedfb52e2f87706c2753715a29665482b0f4a034800c31579df5d458559ac`
+- **Backbone Architecture:** 300M Parameter Conformer Speech Backbone (`facebook/w2v-bert-2.0` / `Wav2Vec2BertModel`, 24 Conformer layers, 1024 hidden size, 16 attention heads)
+- **Pooling & Classification Head:** Learned Softmax Layer Weighting across 25 hidden states, followed by linear projection (1024 -> 1)
+- **Quantization:** None (Full FP32 Precision) — replaced previously degraded INT8 quantization
+- **Audio Preprocessing Pipeline:**
+  1. 16,000 Hz single-channel mono PCM conversion
+  2. Mean zero-centering
+  3. 20 Hz highpass Butterworth filtering (second order SOS filter)
+  4. Duration crop or zero-padding to 4.0 seconds (64,000 samples)
+  5. -23.0 LUFS loudness normalization (ITU-R BS.1770 via `pyloudnorm`)
+  6. 160-dimensional Kaldi povey log-mel filterbank extraction (80 bins, dither=0, normalized, paired into 160-dim frames)
+- **Output Verdict:** `FAKE` (score $\ge 0.50$) or `GENUINE` (score $< 0.50$), where `score = sigmoid(logit)`
+- **Execution Target:** CPU-optimized PyTorch execution
 - **Container Port:** `8321` (internal private network only)
 
 ---
@@ -27,13 +33,16 @@ Incoming Audio Chunk (16kHz PCM WAV)
 Validation & Bounds Check (File size < 25MB, Valid WAV headers)
         │
         ▼
-Feature Extraction (160-dim log-mel filterbank)
+Audio Preprocessing (20Hz Highpass -> Crop/Pad 4.0s -> -23 LUFS Normalization)
         │
         ▼
-PellaV2 Conformer K12 (12-layer INT8 dynamically quantized linear layers)
+Kaldi Povey Filterbank Extraction (160-dim log-mel features)
         │
         ▼
-Raw Logit -> Platt Sigmoid Calibration (a = 1.5635, b = -0.0824)
+PellaV2 Detector (w2v-bert-2.0 Backbone + Learned Layer Weights + Head)
+        │
+        ▼
+Raw Logit -> Sigmoid Probability Score [0.0, 1.0]
         │
         ▼
 FastAPI Endpoint (/predict) -> Returns SpoofPredictionResponse
@@ -51,8 +60,8 @@ TCED Decision Engine (API Gateway) -> Synthesizes Acoustic Spoof with RIAS Seman
 
 | Variable | Default Value | Description |
 |---|---|---|
-| `PELLAV2_MODEL_PATH` | `weights/pellav2_k12_int8_final.pt` | Path to the quantized INT8 PyTorch checkpoint |
-| `PELLAV2_CALIBRATION_PATH` | `config/k12_calibration.json` | Path to calibration JSON containing Platt scaling constants |
+| `PELLAV2_MODEL_PATH` | `weights/pellav2_detector.pt` | Path to the original FP32 PyTorch checkpoint |
+| `PELLAV2_CONFIG_PATH` | `config/w2v_bert_config.json` | Path to Wav2Vec2Bert offline model configuration |
 | `PELLAV2_CHECKSUM_PATH` | `checksums.txt` | Path to sha256 checksum manifest |
 | `PELLAV2_THRESHOLD` | `0.50` | Decision boundary threshold for FAKE vs GENUINE |
 | `PELLAV2_PORT` | `8321` | Internal HTTP microservice port |
@@ -65,13 +74,13 @@ TCED Decision Engine (API Gateway) -> Synthesizes Acoustic Spoof with RIAS Seman
 ## 4. API Endpoints
 
 ### `GET /health`
-Liveness check returning service status and loaded model details.
+Liveness check returning service status, model version (`pellav2-original`), architecture (`PellaV2-w2v-bert-2.0`), and SHA-256 integrity verification.
 
 ### `GET /ready`
 Readiness check returning HTTP 200 when weights are loaded in memory and ready for inference, or HTTP 503 when loading or uninitialized.
 
 ### `GET /metadata`
-Returns architectural metadata, quantization scheme, checksum, calibration constants, and threshold.
+Returns architectural metadata, quantization (`None (FP32)`), checksum, model ID (`Sadanie/pellav2-audio-deepfake-detector`), and decision threshold (`0.50`).
 
 ### `POST /predict`
 Performs acoustic deepfake detection on uploaded audio multipart form-data (`audio/wav`).
@@ -81,11 +90,10 @@ Performs acoustic deepfake detection on uploaded audio multipart form-data (`aud
 {
   "status": "success",
   "prediction": "FAKE",
-  "score": 0.8837,
-  "raw_logit": 1.3495,
+  "score": 0.9986,
   "threshold": 0.50,
-  "model_version": "pellav2_k12_int8",
-  "latency_ms": 1015.42
+  "model_version": "pellav2-original",
+  "latency_ms": 1986.12
 }
 ```
 
@@ -94,7 +102,6 @@ Performs acoustic deepfake detection on uploaded audio multipart form-data (`aud
 ## 5. Security & Isolation
 
 - **Non-root Execution:** Runs under unprivileged user `appuser` (UID 10001) in Docker container.
-- **Resource Constraints:** Constrained to 2GB RAM limit in `docker-compose.yml` to prevent memory exhaustion.
+- **Resource Constraints:** Minimum 8GB RAM recommended (memory limit set to 8G in `docker-compose.yml`) to accommodate the 2.32 GB checkpoint and dynamic tensors during loading and inference.
 - **Strict Network Isolation:** Deployed inside `cfic-internal-network`, strictly unreachable from the external ingress.
-- **Payload Sanitization:** Bounds validation on audio payload size and content MIME types before invoking DSP transformations.
-- **Model Deserialization Integrity:** Weights are verified via SHA-256 before loading, with zero custom unsafe classes deserialized.
+- **Model Deserialization Integrity:** Weights are verified via SHA-256 (`d21aedfb...`) before loading, with zero custom unsafe classes deserialized.
