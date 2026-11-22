@@ -1,863 +1,321 @@
-# CloudForge Intelligence Core (CFIC) × VoiceShield HackVersion
+# CloudForge Intelligence Core (CFIC) × VoiceShield
 
-**Developed by The SAILors for HackWithAditya 2026**
-
-**Team:** The SAILors  
+**Team: Prompt Pirates**  
 **Organization:** SAI Labs  
-**Repository Lead & System Architect:** Kasukurthi Yuvateja Sainadh  
-**Architecture:** Decoupled Hybrid Microservices Architecture  
-**Core Components:** API Gateway + Cloud Inference + Model Microservices  
-**Deployment:** Docker Compose
+**Event:** HackWithAditya 2026  
+**Repository Lead & System Architect:** Kasukurthi Yuvatejasainadh Sainadh  
+**Deployment:** Docker Compose  
+**Architecture:** Decoupled hybrid microservices
+
+> CFIC is the backend intelligence layer for VoiceShield, a voice-security system that combines acoustic deepfake detection with transcript-based conversational fraud analysis.
 
 ---
 
-# 1. Project Overview
+## Overview
 
-## 1.1 CloudForge Intelligence Core
+CloudForge Intelligence Core (CFIC) powers **VoiceShield** by coordinating independent machine-learning services and combining their evidence into an explainable risk outcome.
 
-CloudForge Intelligence Core (CFIC) is the backend intelligence system powering **VoiceShield**, an AI-powered voice security platform designed to detect AI-generated deepfake voices and conversational fraud.
+VoiceShield analyzes submitted audio through two complementary paths:
 
-CFIC provides a modular, decoupled architecture that separates application-level request management from computationally intensive machine learning inference.
+- **Acoustic intelligence:** PellaV2 evaluates audio for synthetic or manipulated speech.
+- **Conversational intelligence:** language identification (LID) selects the ASR model; the transcript is then evaluated by Gemma RIAS for fraud, impersonation, and social-engineering risk.
 
-The system is divided into two primary subsystems:
+The API Gateway handles client requests, authentication, validation, request tracing, and final response orchestration. The Cloud Inference Orchestrator coordinates model services over Docker's internal network.
 
-1. **API Gateway (`api-gateway/`)**
-   - Public-facing API.
-   - Authentication and authorization.
-   - Rate limiting.
-   - Audio validation and preprocessing.
-   - Five-second audio chunking.
-   - Job lifecycle management and queuing.
-   - Final risk aggregation and decision management.
+## Goals
 
-2. **Cloud Inference (`cloud-inference/`)**
-   - Language Identification (LID).
-   - Language-specific Automatic Speech Recognition (ASR).
-   - Acoustic spoof/deepfake detection using PellaV2.
-   - Conversational risk assessment using Gemma RIAS.
-   - Model routing, inference coordination and response normalization.
+- Identify potential AI-generated or manipulated speech.
+- Identify the spoken language and transcribe supported languages.
+- Detect conversational fraud patterns, impersonation, urgency, intimidation, and manipulation.
+- Combine acoustic and conversational evidence without conflating their signals.
+- Provide fail-safe results when required evidence is unavailable.
+- Keep model-serving components modular and independently deployable.
 
-The architecture allows individual models to be developed, containerized, tested and optimized independently.
+## Architecture
 
-## 1.2 Core Objectives
+### High-level request flow
 
-- Detect AI-generated or manipulated speech.
-- Identify the spoken language automatically.
-- Transcribe supported Indian languages accurately.
-- Detect conversational fraud, impersonation and social-engineering attempts.
-- Combine acoustic and semantic intelligence for a unified risk assessment.
-- Support scalable, containerized deployment.
-- Maintain privacy, security and modularity.
-
----
-
-# 2. Updated System Architecture
-
-## 2.1 Architectural Design
-
-CFIC follows a decoupled hybrid architecture consisting of:
-
-- API Gateway for external client communication.
-- Cloud Inference Orchestrator for model coordination.
-- Independent model-serving microservices.
-- Centralized application-level decision engine.
-
-The architecture uses two independent detection paths:
-
-**Path A — Acoustic Intelligence**
-
-Analyzes the audio signal to identify potential AI-generated or manipulated speech using PellaV2.
-
-**Path B — Conversational Intelligence**
-
-Identifies the spoken language, generates a transcript and evaluates conversational fraud risk using Gemma RIAS.
-
-Both paths contribute to the final VoiceShield decision.
-
-## 2.2 Updated Architecture Diagram
-
-```text
-                 VOICESHIELD CLIENT
-                  Audio Input
-                       |
-                       v
-        +--------------------------------+
-        |       CFIC API GATEWAY         |
-        |             :8000              |
-        |--------------------------------|
-        | API Authentication             |
-        | Rate Limiting                  |
-        | Audio Validation               |
-        | Request ID / Job Management    |
-        | 5-Second Audio Chunking        |
-        | Queue Management               |
-        +---------------+----------------+
-                        |
-                        v
-        +--------------------------------+
-        |  CLOUD INFERENCE ORCHESTRATOR  |
-        |             :8200              |
-        +---------------+----------------+
-                        |
-             +----------+----------+
-             |                     |
-             v                     v
-    +----------------+    +--------------------+
-    | ACOUSTIC PATH  |    | CONVERSATIONAL PATH|
-    +----------------+    +--------------------+
-             |                     |
-             v                     v
-    +----------------+    +--------------------+
-    |    PellaV2     |    | Language ID (LID)  |
-    | Acoustic Deep- |    |      :8301         |
-    | fake Detection |    +---------+----------+
-    |     :8321      |              |
-    +--------+-------+              v
-             |              Language Routing
-             |                     |
-             |          +----------+----------+
-             |          |          |          |
-             |          v          v          v
-             |       Telugu     Hindi     English
-             |       Indic      Indic     Whisper
-             |       Conformer  Conformer  ASR
-             |       :8312      :8313      :8311
-             |          |          |          |
-             |          +----------+----------+
-             |                     |
-             |                     v
-             |              Transcript
-             |                     |
-             |                     v
-             |             +---------------+
-             |             |   Gemma RIAS  |
-             |             |     :8331     |
-             |             | Conversational|
-             |             | Risk Analysis |
-             |             +-------+-------+
-             |                     |
-             +----------+----------+
-                        |
-                        v
-        +--------------------------------+
-        |       CFIC DECISION ENGINE     |
-        |--------------------------------|
-        | Acoustic Risk Evaluation       |
-        | Conversational Risk Evaluation |
-        | Risk Aggregation               |
-        | Mandatory High-Risk Override   |
-        | Fail-Safe Inconclusive Policy  |
-        +---------------+----------------+
-                        |
-                        v
-        +--------------------------------+
-        |       NORMALIZED RESPONSE      |
-        |                                |
-        | GENUINE / FAKE / SUSPICIOUS /  |
-        | INCONCLUSIVE                   |
-        +---------------+----------------+
-                        |
-                        v
-                  VOICESHIELD CLIENT
+```mermaid
+flowchart TD
+    A[VoiceShield Client / Audio Upload] --> B[API Gateway :8000]
+    B --> C[Cloud Inference Orchestrator :8200]
+    C --> D[PellaV2 Acoustic Detection]
+    C --> E[Language Identification / LID :8301]
+    E --> F{Detected language}
+    F -->|Telugu| G[IndicConformer Telugu :8312]
+    F -->|Hindi| H[IndicConformer Hindi :8313]
+    F -->|English| I[Whisper Base English :8311]
+    G --> J[Transcript]
+    H --> J
+    I --> J
+    J --> K[Gemma RIAS :8331]
+    D --> L[CFIC Decision Engine]
+    K --> L
+    L --> M[Normalized Analysis Result]
+    M --> A
 ```
 
-*Note: The diagram represents the target integration architecture. Individual services must be independently validated before being marked operational.*
+### Components
 
-## 2.3 Architectural Principles
+| Component | Responsibility | Port |
+|---|---|---:|
+| API Gateway | Public API, authentication, rate limits, upload validation, request IDs, orchestration and final decision | 8000 |
+| Cloud Inference Orchestrator | Coordinates model calls, language routing, response normalization and inference status | 8200 |
+| LID | Detects language and supplies routing signal | 8301 |
+| English ASR | Whisper Base English transcription | 8311 |
+| Telugu ASR | IndicConformer Telugu transcription | 8312 |
+| Hindi ASR | IndicConformer Hindi transcription | 8313 |
+| PellaV2 | Acoustic synthetic/manipulated-speech detection | 8321 |
+| Gemma RIAS | Transcript-based conversational risk assessment | 8331 |
 
-1. Each model operates as an independently deployable service.
-2. The orchestrator owns inference routing and coordination.
-3. The API Gateway owns application-level request lifecycle and final response management.
-4. LID determines the appropriate ASR checkpoint.
-5. Acoustic spoof detection and conversational fraud detection remain independent inference tasks.
-6. Gemma RIAS analyzes transcripts, not raw audio.
-7. The final decision engine combines the available inference results.
-8. Internal services communicate through private Docker networking.
-9. Model weights are mounted independently from application source code.
-10. Model failures must not silently produce false genuine classifications.
+> Ports shown are the intended service ports. Confirm actual exposed ports and service health with the current Compose configuration.
 
----
+### Two evidence paths
 
-# 3. System Components and Responsibilities
+**Path A — Acoustic detection**
+- Input: audio
+- Service: PellaV2
+- Output: acoustic detection result and model metadata
 
-## 3.1 API Gateway
+**Path B — Conversational analysis**
+1. LID identifies the language.
+2. Orchestrator routes to the appropriate ASR service.
+3. ASR returns a transcript.
+4. Gemma RIAS evaluates transcript content for conversational risk.
 
-**Directory:** `api-gateway/`
+The CFIC Decision Engine combines the available evidence and service statuses. It must not treat a failed or missing inference as a safe result.
 
-The API Gateway is the public entry point of CFIC.
+## Model stack
 
-Responsibilities:
+| Capability | Selected model/service | Notes |
+|---|---|---|
+| Language identification | Open-Vakgyata | Language routing |
+| English transcription | Whisper Base English | English ASR service |
+| Telugu transcription | IndicConformer Telugu | Telugu-specific checkpoint |
+| Hindi transcription | IndicConformer Hindi | Hindi-specific checkpoint |
+| Acoustic deepfake detection | PellaV2 | Acoustic evidence |
+| Conversational risk assessment | Gemma 4 E2B IT | GGUF Q4_K_M, served through llama.cpp |
 
-- Expose REST API endpoints.
-- Authenticate requests using API keys.
-- Enforce request rate limits.
-- Validate audio formats and payload sizes.
-- Generate and propagate request IDs.
-- Store temporary audio data securely.
-- Divide long audio inputs into five-second windows.
-- Manage inference jobs and queues.
-- Communicate with the Cloud Inference Orchestrator.
-- Collect acoustic and conversational inference results.
-- Execute the final decision engine.
-- Return normalized client responses.
+Model weights are distributed separately from application source and mounted into their services where configured. Checkpoint versions, licenses, checksums, and runtime settings should be recorded in model documentation.
 
-### Security and request management
+### Explicit architecture decisions
 
-| Feature | Specification |
+- **PellaV2 is the selected acoustic detector.**
+- **Gemma RIAS is the conversational risk model.**
+- **Qwen is not part of the selected runtime architecture.**
+- **VMC-South and the AASIST-L fallback are legacy/out-of-scope for the current architecture.** Remove obsolete references from active Compose wiring and documentation only through the project's reviewed integration work; their presence in an older checkout does not mean they are part of the target design.
+
+## Decision outcomes
+
+The CFIC Decision Engine returns one of the following:
+
+| Outcome | Meaning |
 |---|---|
-| Authentication | X-API-Key |
-| Rate limiting | 30 requests / 60 seconds |
-| Audio upload limit | 25 MiB |
-| Chunking | 5-second windows |
-| Request tracing | X-Request-ID |
-| Queue management | Job-based processing |
-| Error handling | Structured API responses |
+| `GENUINE` | Evidence supports a genuine/non-suspicious classification under the decision policy |
+| `FAKE` | Acoustic evidence indicates synthetic or manipulated speech |
+| `SUSPICIOUS` | Conversational evidence or a high-risk signal indicates potential fraud |
+| `INCONCLUSIVE` | Required evidence is missing, invalid, conflicting, or insufficient |
 
-The API Gateway must not directly load or execute machine learning checkpoints.
+The decision policy is deterministic and fail-safe. High-risk evidence must not be silently downgraded by a low-risk signal, and missing inference results must never be interpreted as proof of safety.
 
-## 3.2 Cloud Inference Orchestrator
-
-**Directory:** `cloud-inference/orchestrator/`
-
-The orchestrator coordinates independent model services.
-
-Responsibilities:
-
-- Accept inference jobs from the API Gateway.
-- Forward audio to PellaV2.
-- Invoke LID.
-- Determine language-specific ASR routing.
-- Coordinate ASR execution.
-- Aggregate transcript segments.
-- Forward normalized transcripts to Gemma RIAS.
-- Collect model outputs.
-- Normalize inference responses.
-- Handle model timeouts and service failures.
-
-The orchestrator must not duplicate the API Gateway's authentication, rate-limiting or application-level job management responsibilities.
-
-## 3.3 Language Identification (LID)
-
-**Directory:** `cloud-inference/models/lid/`
-
-**Model:** Open-Vakgyata
-
-Responsibilities:
-
-- Identify the spoken language from audio.
-- Support the configured Indian language set.
-- Return language codes and confidence scores.
-- Provide the language decision to the orchestrator.
-- Enable language-specific ASR checkpoint selection.
-
-The LID service must remain independent of ASR services.
-
-## 3.4 Language-Specific ASR
-
-**Directory:** `cloud-inference/models/asr/indicconformer/`
-
-CFIC uses language-specific transcription checkpoints instead of depending exclusively on a single multilingual transcription model.
-
-| Language | Model | Service | Port |
-|---|---|---|---|
-| English | Whisper Base English | model-asr-en | 8311 |
-| Telugu | IndicConformer Telugu | model-asr-te | 8312 |
-| Hindi | IndicConformer Hindi | model-asr-hi | 8313 |
-
-Responsibilities:
-
-- Accept normalized audio input.
-- Perform speech-to-text inference.
-- Return transcription and model metadata.
-- Support chunk-based transcription.
-- Maintain consistent response contracts.
-
-### Routing policy
-
-| LID Result | ASR Selection |
-|---|---|
-| Telugu (`te`) | Telugu IndicConformer |
-| Hindi (`hi`) | Hindi IndicConformer |
-| English (`en`) | Whisper Base English |
-| Unsupported language | Structured unsupported-language response |
-| Low confidence | Inconclusive or configured retry policy |
-
-Additional language-specific checkpoints may be integrated in future releases without redesigning the overall architecture.
-
-## 3.5 Acoustic Spoof Detection — PellaV2
-
-**Directory:** `cloud-inference/models/pellav2/`
-
-**Responsible:** Varun
-
-PellaV2 is the acoustic intelligence component of VoiceShield.
-
-Responsibilities:
-
-- Analyze audio signals for potential synthetic or manipulated speech.
-- Produce structured acoustic detection results.
-- Support the selected quantized model format.
-- Expose inference latency and model metadata.
-- Operate as an independent microservice.
-
-### Model optimization
-
-Varun is responsible for:
-
-- Evaluating the original PellaV2 checkpoint.
-- Comparing available quantized variants.
-- Measuring model size and inference performance.
-- Validating detection consistency after quantization.
-- Packaging the selected checkpoint for containerized inference.
-- Documenting the final model format and checksum.
-
-The selected quantized model must be evaluated against the original checkpoint before being locked.
-
-**Important architecture decision:** VMC-South and its associated AASIST-L fallback architecture are removed from the current project plan. PellaV2 is the designated acoustic detection component.
-
-## 3.6 Conversational Risk Assessment — Gemma RIAS
-
-**Directory:** `cloud-inference/models/rias/`
-
-**Selected Model:** `google/gemma-4-E2B-it`
-
-**Quantized Format:** GGUF Q4_K_M
-
-**Inference Runtime:** llama.cpp / llama-cpp-python
-
-**Service Port:** 8331
-
-Gemma RIAS evaluates the semantic content of transcribed conversations.
-
-Responsibilities:
-
-- Analyze conversational context.
-- Identify impersonation attempts.
-- Detect social-engineering patterns.
-- Identify urgency and intimidation tactics.
-- Detect financial manipulation and fraudulent instructions.
-- Generate structured risk assessments.
-
-### Locked model details
-
-| Property | Selected Configuration |
-|---|---|
-| Model | Gemma 4 E2B IT |
-| Quantization | GGUF Q4_K_M |
-| Checkpoint size | Approximately 2.96 GB |
-| Docker image | Approximately 1.01 GB |
-| Runtime | llama.cpp |
-| Execution | CPU-based, OpenMP |
-| Container | model-rias-gemma |
-| Port | 8331 |
-
-The Gemma RIAS service has already been containerized and validated.
-
-**Qwen is not part of the selected architecture.**
-
----
-
-# 4. Final Decision Engine
-
-The CFIC Decision Engine combines independent model outputs into one application-level risk decision.
-
-## 4.1 Input Signals
-
-1. PellaV2 acoustic detection result.
-2. LID language identification result.
-3. ASR transcript.
-4. Gemma RIAS conversational risk assessment.
-5. Service execution status and confidence metadata.
-
-## 4.2 Decision Categories
-
-| Final Classification | Meaning |
-|---|---|
-| GENUINE | No significant acoustic or conversational threat detected |
-| FAKE | Strong evidence of synthetic or manipulated speech |
-| SUSPICIOUS | Significant conversational fraud or other suspicious behavior |
-| INCONCLUSIVE | Insufficient evidence or critical inference failure |
-
-## 4.3 Decision Principles
-
-- A confirmed high-risk signal must not be downgraded by a low-risk result from another model.
-- Acoustic spoof detection and conversational fraud detection must remain distinguishable in the response.
-- Missing model outputs must not be interpreted as safe results.
-- Critical inference failures must trigger the configured fail-safe policy.
-- The system must preserve individual model results for auditing and debugging.
-- The final decision must be deterministic and documented.
-
-The exact confidence thresholds and aggregation rules must be established through validation rather than invented.
-
----
-
-# 5. Repository Structure
+## Repository layout
 
 ```text
-CFIC-VoiceShield-HackVersion/
-│
-├── api-gateway/
-│   ├── app/
-│   │   ├── api/routes/
-│   │   ├── core/
-│   │   ├── middleware/
-│   │   ├── db/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   ├── orchestration/
-│   │   └── main.py
-│   ├── tests/
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── .env.example
-│
+.
+├── api-gateway/                 # Client API, auth, validation, response orchestration
 ├── cloud-inference/
-│   │
-│   ├── orchestrator/
-│   │   ├── app/
-│   │   ├── tests/
-│   │   ├── requirements.txt
-│   │   └── Dockerfile
-│   │
+│   ├── orchestrator/            # Internal model coordination and routing
 │   ├── models/
-│   │   │
-│   │   ├── lid/
-│   │   │   ├── app/
-│   │   │   ├── tests/
-│   │   │   ├── weights/
-│   │   │   └── Dockerfile
-│   │   │
+│   │   ├── lid/                 # Language identification
 │   │   ├── asr/
 │   │   │   └── indicconformer/
-│   │   │       ├── english/
-│   │   │       ├── hindi/
-│   │   │       └── telugu/
-│   │   │
-│   │   ├── pellav2/
-│   │   │   ├── app/
-│   │   │   ├── tests/
-│   │   │   ├── weights/
-│   │   │   └── Dockerfile
-│   │   │
-│   │   └── rias/
-│   │       ├── app/
-│   │       ├── tests/
-│   │       ├── weights/
-│   │       └── Dockerfile
-│   │
-│   └── shared/
-│       ├── contracts/
-│       ├── audio/
-│       └── schemas/
-│
-├── infrastructure/
-│   ├── redis/
-│   ├── postgres/
-│   ├── monitoring/
-│   └── docker/
-│
-├── legacy/
-│   ├── services/
-│   └── tced/
-│
-├── docs/
-│   ├── architecture/
-│   ├── api-contracts/
-│   ├── security/
-│   ├── deployment/
-│   └── models/
-│
-├── cfic-asr-benchmark/
-│
-├── scripts/
-│
+│   │   │       ├── english/     # Whisper English service
+│   │   │       ├── hindi/       # Hindi IndicConformer
+│   │   │       └── telugu/      # Telugu IndicConformer
+│   │   ├── pellav2/            # PellaV2 acoustic detector
+│   │   └── rias/                # Gemma RIAS
+│   ├── shared/                  # Shared contracts/utilities (where present)
+│   └── llm-evaluation/          # RIAS evaluation assets (where present)
+├── docs/                         # Architecture, API, deployment, model docs
+├── scripts/                       # Helper scripts
 ├── docker-compose.yml
-├── .gitignore
 └── README.md
 ```
 
-The actual directory layout should be reconciled with the existing repository during implementation. This is the intended logical organization, not authorization to create duplicate directories unnecessarily.
+This is the logical layout. Refer to the current repository tree for exact file locations and any additional test or infrastructure directories.
 
----
+## API
 
-# 6. Docker and Deployment Architecture
+### Local endpoint
 
-CFIC uses Docker Compose to coordinate independently containerized services.
+- Base URL: `http://localhost:8000`
+- Interactive API docs: `http://localhost:8000/docs`
+- OpenAPI schema: `http://localhost:8000/openapi.json`
 
-## 6.1 Service Ports
+### Analyze audio
 
-| Component | Internal Port |
-|---|---:|
-| API Gateway | 8000 |
-| Cloud Inference Orchestrator | 8200 |
-| LID | 8301 |
-| English Whisper ASR | 8311 |
-| Telugu IndicConformer | 8312 |
-| Hindi IndicConformer | 8313 |
-| PellaV2 | 8321 |
-| Gemma RIAS | 8331 |
+`POST /v1/analyze`
 
-These are the intended service ports and must be reconciled with the actual implementation.
+Send audio as multipart form data using the `file` field and include the configured API key in the `X-API-Key` header.
 
-## 6.2 Networking
+Supported upload formats documented by the endpoint: WAV, MP3, FLAC, and OGG.
 
-- API Gateway exposes the public application API.
-- Cloud Inference services operate on a private Docker network.
-- Internal service communication uses Docker DNS names.
-- Model services should not expose unnecessary host ports.
-- Model weights are mounted read-only wherever possible.
-- Docker build contexts must exclude large model binaries.
+Example with curl (replace the API key and path):
 
-## 6.3 Model Packaging
+```bash
+curl -X POST "http://localhost:8000/v1/analyze" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -F "file=@sample.wav"
+```
 
-Model checkpoints must remain separate from application source code.
+Use Swagger UI at `/docs` for the authoritative request schema and response fields.
 
-Preferred storage:
+## Local deployment
 
-- Hugging Face repositories for model distribution where appropriate.
-- GitHub repository for application code, configuration and deployment files.
-- Versioned model references and SHA-256 checksums for reproducibility.
+### Prerequisites
 
-Large model binaries must not be committed directly into the main application repository unless explicitly justified.
+- Docker Desktop with Docker Compose
+- Git
+- Sufficient memory and CPU for the model containers
+- Model checkpoint files downloaded to the expected weight directories
 
----
+### 1. Clone the repository
 
-# 7. Environment Configuration
+```bash
+git clone https://github.com/yuvatejasainadh/cfic-for-voice-shield-hwa.git
+cd cfic-for-voice-shield-hwa
+```
 
-The following represents the intended configuration categories. Exact variable names must match the actual service implementations.
+### 2. Configure environment
 
-| Variable | Purpose |
-|---|---|
-| `CFIC_ENV` | Application environment |
-| `CFIC_API_KEY` | API authentication |
-| `CFIC_RATE_LIMIT_REQUESTS` | Maximum requests |
-| `CFIC_RATE_LIMIT_WINDOW_SECONDS` | Rate limit window |
-| `CFIC_MAX_AUDIO_BYTES` | Maximum audio payload |
-| `CFIC_CLOUD_INFERENCE_URL` | Orchestrator endpoint |
-| `LID_USE_MOCK` | LID development mock |
-| `ASR_EN_USE_MOCK` | English ASR development mock |
-| `ASR_TE_USE_MOCK` | Telugu ASR development mock |
-| `ASR_HI_USE_MOCK` | Hindi ASR development mock |
-| `PELLAV2_USE_MOCK` | PellaV2 development mock |
-| `RIAS_USE_MOCK` | RIAS development mock |
+Review `docker-compose.yml` and the service `.env.example` files. Set required values in a local `.env` file as appropriate.
 
-Production or final validation configurations must disable mocks.
+Do not use real credentials in committed files. Never commit API keys, access tokens, or private model credentials.
 
-All secrets must be supplied through environment configuration and must never be committed.
+For local testing, replace placeholder API keys with your own local value and use the same value when calling the API.
 
----
+### 3. Prepare model weights
 
-# 8. Team Organization and Task Distribution
+Download or obtain each model checkpoint according to the service-specific instructions. Place files in the configured weight directories. Do not commit large checkpoint files to the application repository.
 
-## Team: The SAILors
+Check each model's README for:
+- exact checkpoint filename
+- revision/commit
+- license and use restrictions
+- checksum
+- expected runtime and memory
 
-**Organization:** SAI Labs
+### 4. Build and start services
 
-The team follows a modular ownership model in which each contributor owns a defined engineering responsibility.
+```bash
+docker compose config
+docker compose build
+docker compose up -d
+```
 
-## 8.1 Sainadh — Repository Lead & System Architect
+### 5. Verify services
 
-**Primary responsibility:** Overall architecture, API Gateway and full-system integration.
+```bash
+docker compose ps
+docker compose logs --tail=100 api-gateway cloud-inference-orchestrator
+```
 
-Assigned work:
+Check the Gateway health endpoint and open Swagger:
 
-1. Own the overall CFIC architecture.
-2. Maintain the Software Requirements Specification.
-3. Maintain API Gateway architecture and implementation.
-4. Implement API authentication and authorization.
-5. Implement rate limiting.
-6. Implement audio validation and five-second chunking.
-7. Implement job lifecycle and queue management.
-8. Integrate LID with the inference orchestrator.
-9. Coordinate language-specific ASR routing.
-10. Integrate PellaV2 and Gemma RIAS.
-11. Implement application-level decision aggregation.
-12. Maintain Docker Compose and service networking.
-13. Perform integration testing and regression testing.
-14. Review pull requests and approve architectural changes.
-15. Maintain repository quality and release readiness.
+- `http://localhost:8000/docs`
 
-**Ownership directories:**
+The compose service names and health endpoints may differ across branches; use the current Compose file and service documentation.
 
-- `api-gateway/`
-- `cloud-inference/orchestrator/` (integration and architecture)
-- `cloud-inference/models/lid/` (LID integration and coordination)
-- `docker-compose.yml`
-- `docs/architecture/`
+### 6. Stop the stack
 
-**Branch:** `feat/sainadh-api-integration`
+```bash
+docker compose down
+```
 
-## 8.2 Pallavi — Telugu ASR Engineer
+This stops and removes Compose containers and networks. Persistent named volumes are not removed unless you explicitly add `-v`; avoid doing so if you need to preserve cached/model data.
 
-**Primary responsibility:** Telugu IndicConformer containerization and validation.
+## Configuration and security
 
-Assigned work:
+- Authentication uses the `X-API-Key` header.
+- The Gateway enforces request limits configured by environment variables.
+- The default upload size limit is 25 MiB.
+- The documented rate-limit default is 30 requests per 60 seconds.
+- The Gateway/orchestrator and model services should communicate over private Docker networking.
+- Keep `.env` files local and out of version control.
+- Avoid logging raw audio, sensitive transcripts, API keys, or credentials.
+- Use request IDs to correlate service logs during debugging.
+- Disable mock mode for real inference validation; check each service's environment configuration.
 
-1. Inspect the selected Telugu IndicConformer checkpoint.
-2. Prepare the model-serving application.
-3. Implement the inference API.
-4. Build the Dockerfile.
-5. Configure model weight mounting.
-6. Optimize CPU/GPU inference configuration as supported.
-7. Implement input and output validation.
-8. Test Telugu transcription accuracy.
-9. Validate five-second chunk inference.
-10. Document model requirements and deployment instructions.
+Configuration variable names and defaults can vary by service/version. Use `.env.example` and the actual service config as the source of truth.
 
-**Ownership directory:**
+## Testing and validation
 
-`cloud-inference/models/asr/indicconformer/telugu/`
+Test each service independently before end-to-end integration.
 
-**Branch:** `feat/pallavi-telugu-asr`
+Suggested validation sequence:
 
-## 8.3 Varshu — Hindi ASR Engineer
+1. Gateway authentication, rate limiting, upload validation, and health checks.
+2. LID language detection and confidence output.
+3. ASR transcription for English, Hindi, and Telugu.
+4. PellaV2 inference using genuine and synthetic/manipulated test samples.
+5. Gemma RIAS structured risk assessment with transcript test cases.
+6. Orchestrator routing, timeouts, error propagation, and response parsing.
+7. Decision Engine tests for all supported evidence combinations.
+8. End-to-end audio upload through `/v1/analyze`.
+9. Verify behavior when a downstream model is unavailable or times out.
 
-**Primary responsibility:** Hindi IndicConformer containerization and validation.
+Use only appropriately licensed datasets and audio, and document the dataset split, evaluation method, and metrics when reporting model performance.
 
-Assigned work:
+## Team — Prompt Pirates
 
-1. Inspect the selected Hindi IndicConformer checkpoint.
-2. Prepare the model-serving application.
-3. Implement the inference API.
-4. Build the Dockerfile.
-5. Configure model weight mounting.
-6. Optimize inference configuration.
-7. Implement input and output validation.
-8. Test Hindi transcription accuracy.
-9. Validate five-second chunk inference.
-10. Document model requirements and deployment instructions.
+**Team organization:** SAI Labs
 
-**Ownership directory:**
+| Contributor | Role | Ownership / focus |
+|---|---|---|
+| Kasukurthi Yuvateja Sainadh | Repository Lead & System Architect | Gateway, architecture, orchestration integration, decision engine, Compose, system testing and PR review |
+| Pallavi | Telugu ASR Engineer | Telugu IndicConformer service packaging, API, container, accuracy and inference validation |
+| Varshu | Hindi ASR Engineer | Hindi IndicConformer service packaging, API, container, accuracy and inference validation |
+| Varun | MLOps & Model Optimization Engineer | PellaV2 quantization, model-size/latency comparison, quality validation, packaging and checksum |
 
-`cloud-inference/models/asr/indicconformer/hindi/`
+Ownership describes team responsibilities and intended areas of contribution. Refer to the Git history and PRs for verified individual contribution records.
 
-**Branch:** `feat/varshu-hindi-asr`
-
-## 8.4 Varun — MLOps & Model Optimization Engineer
-
-**Primary responsibility:** PellaV2 model quantization and deployment packaging.
-
-Assigned work:
-
-1. Inspect the original PellaV2 checkpoint.
-2. Evaluate supported quantization approaches.
-3. Generate optimized checkpoint variants.
-4. Compare original and quantized model sizes.
-5. Benchmark inference latency and resource consumption.
-6. Validate detection performance after quantization.
-7. Select and document the final checkpoint.
-8. Generate SHA-256 checksums.
-9. Prepare model-serving integration requirements.
-10. Package the selected model for Docker deployment.
-11. Document model versioning and distribution.
-
-**Ownership directory:**
-
-`cloud-inference/models/pellav2/`
-
-**Branch:** `feat/varun-pellav2-optimization`
-
----
-
-# 9. Team Development Workflow
-
-All contributors must follow the same Git workflow.
-
-## 9.1 Branching Strategy
-
-| Branch | Purpose |
-|---|---|
-| `main` | Stable integrated code |
-| `feat/sainadh-api-integration` | Gateway and integration |
-| `feat/pallavi-telugu-asr` | Telugu ASR |
-| `feat/varshu-hindi-asr` | Hindi ASR |
-| `feat/varun-pellav2-optimization` | PellaV2 optimization |
-
-Branch names can be adjusted to match existing repository conventions.
-
-## 9.2 Pull Request Process
+## Development workflow
 
 1. Create a feature branch from the latest `main`.
-2. Implement only the assigned component.
-3. Run component-level tests.
-4. Validate Docker builds.
-5. Document dependencies and configuration.
-6. Commit meaningful changes.
-7. Push the feature branch.
-8. Create a pull request against `main`.
-9. Request review.
-10. Merge only after integration compatibility is confirmed.
+2. Keep work scoped to the assigned component.
+3. Run unit and service-level tests.
+4. Validate Docker build and service health.
+5. Update component documentation and configuration examples.
+6. Open a PR against `main`.
+7. Review shared API contracts and Docker changes before integration.
+8. Merge only after CI and integration checks pass.
 
-## 9.3 Ownership Boundaries
+Do not commit model binaries, secrets, generated temporary audio, or local environment files unless explicitly approved.
 
-- Contributors must not modify another contributor's owned model implementation without coordination.
-- Shared contracts must be agreed upon before integration.
-- API contract changes require System Architect approval.
-- Docker Compose changes affecting multiple services require integration review.
-- Model checkpoints must not be committed casually.
-- No one should push experimental changes directly to `main`.
+## Known limitations / status discipline
 
----
+This README describes the intended architecture and development workflow. It does not certify every model service, checkpoint, integration path, or performance target as operational.
 
-# 10. Testing and Quality Assurance
+- Model accuracy and latency must be backed by reproducible benchmarks.
+- A container health check confirms service health, not necessarily successful inference.
+- A downstream HTTP 200 is not sufficient evidence that the Gateway correctly consumed the model response.
+- Inference timeouts and unavailable services must be reported accurately and must not result in a false `GENUINE` classification.
+- Legacy services/configuration may still exist in older branches and should be treated as transitional until removed and validated.
 
-CFIC follows component-level testing and end-to-end integration testing.
+## Roadmap
 
-## 10.1 Component Testing
+- Stabilize cloud orchestration and timeout/error propagation.
+- Validate all model service contracts end-to-end.
+- Improve Gemma RIAS inference latency and resource utilization.
+- Expand language support and ASR evaluation.
+- Add monitoring, metrics, and traceability.
+- Improve deployment automation and reproducibility.
 
-| Component | Required Validation |
-|---|---|
-| API Gateway | Authentication, rate limits, validation and job handling |
-| LID | Language detection and confidence |
-| Telugu ASR | Telugu transcription |
-| Hindi ASR | Hindi transcription |
-| English ASR | English transcription |
-| PellaV2 | Acoustic spoof detection |
-| Gemma RIAS | Conversational risk assessment |
-| Orchestrator | Routing, timeouts and service coordination |
+## Project identity
 
-## 10.2 End-to-End Testing
+**CloudForge Intelligence Core (CFIC) × VoiceShield**  
+**Team Prompt Pirates — SAI Labs**
 
-Test the complete pipeline using genuine audio samples.
+Building intelligent voice security infrastructure to detect synthetic speech, impersonation, and conversational fraud.
 
-1. Telugu audio.
-2. Hindi audio.
-3. English audio.
-4. Unsupported language.
-5. Low-confidence language detection.
-6. Corrupted audio.
-7. Empty audio.
-8. Long audio requiring chunking.
-9. PellaV2 unavailable.
-10. Gemma RIAS unavailable.
-11. LID unavailable.
-12. Concurrent requests and queue saturation.
-
-## 10.3 Privacy Validation
-
-- No unnecessary transcript exposure in logs.
-- No raw audio leakage.
-- Secure temporary audio storage.
-- Proper cleanup of temporary files.
-- No API credentials in logs.
-- Structured errors without sensitive payload exposure.
-
-## 10.4 Existing Regression Baseline
-
-The Gemma RIAS integration was previously validated with:
-
-| Test Suite | Passed |
-|---|---:|
-| API Gateway | 47/47 |
-| Cloud Inference Orchestrator | 13/13 |
-| Open-Vakgyata LID | 5/5 |
-| English Whisper ASR | 5/5 |
-| Gemma RIAS | 17/17 |
-| **Total** | **87/87** |
-
-These are historical validation results, not a substitute for testing the newly integrated pipeline.
-
----
-
-# 11. Documentation and Project Maintenance
-
-The following documentation must be maintained:
-
-| Document | Responsibility |
-|---|---|
-| System Architecture | Sainadh |
-| API Documentation | Sainadh |
-| LID Documentation | Sainadh |
-| Telugu ASR Documentation | Pallavi |
-| Hindi ASR Documentation | Varshu |
-| PellaV2 Model Documentation | Varun |
-| Gemma RIAS Documentation | Sainadh |
-| Docker Deployment Guide | Sainadh |
-| Integration Testing Report | Sainadh |
-
-All documentation must reflect the actual implementation.
-
----
-
-# 12. Future Development Roadmap
-
-The current HackVersion focuses on a functional, modular, containerized architecture.
-
-Future improvements may include:
-
-1. Additional Indian language-specific ASR checkpoints.
-2. Improved PellaV2 quantization and inference acceleration.
-3. Distributed job queues.
-4. Redis-backed rate limiting.
-5. PostgreSQL-backed job persistence.
-6. Prometheus monitoring and performance dashboards.
-7. Horizontal scaling of inference services.
-8. GPU-enabled inference deployment.
-9. Advanced acoustic and semantic risk fusion.
-10. Production-grade authentication and authorization.
-
-These are future enhancements and must not be represented as already implemented.
-
----
-
-# 13. Architecture Decisions and Explicit Exclusions
-
-The following decisions define the current architecture.
-
-| Area | Current Decision |
-|---|---|
-| Overall architecture | Decoupled hybrid microservices |
-| API entry point | FastAPI API Gateway |
-| Inference coordination | Cloud Inference Orchestrator |
-| Language identification | Open-Vakgyata |
-| Telugu ASR | IndicConformer Telugu |
-| Hindi ASR | IndicConformer Hindi |
-| English ASR | Whisper Base English |
-| Acoustic spoof detection | PellaV2 |
-| Conversational risk assessment | Gemma 4 E2B IT |
-| Gemma format | GGUF Q4_K_M |
-| Inference runtime | llama.cpp |
-| Audio chunking | Five-second windows |
-| Containerization | Docker Compose |
-| Internal networking | Private Docker bridge |
-| Model storage | Separate versioned model artifacts |
-
----
-
-# 14. Project Completion Criteria
-
-CFIC × VoiceShield HackVersion will be considered integration-ready when:
-
-1. All required model services are independently containerized.
-2. LID correctly identifies supported languages.
-3. The orchestrator selects the correct ASR checkpoint.
-4. Telugu, Hindi and English transcription are operational.
-5. PellaV2 performs genuine acoustic inference.
-6. Gemma RIAS performs genuine conversational inference.
-7. The API Gateway handles authentication, rate limiting, chunking and job management.
-8. The decision engine combines model outputs correctly.
-9. All required services communicate through private Docker networking.
-10. End-to-end audio testing succeeds.
-11. Existing regression tests remain passing.
-12. Documentation reflects the final implementation.
-13. The repository has no obsolete VMC-South architecture dependencies.
-
----
-
-# 15. Project Identity
-
-**Project:** CloudForge Intelligence Core (CFIC) × VoiceShield HackVersion
-
-**Team:** The SAILors
-
-**Organization:** SAI Labs
-
-**Event:** HackWithAditya 2027
-
-**Repository Lead & System Architect:** Kasukurthi Yuvateja Sainadh
-
-**Mission:**
-
-Building intelligent, modular and scalable voice security infrastructure to protect individuals and organizations against AI-generated voice manipulation and conversational fraud.
-
-**The SAILors — Building Intelligence. Securing Voices.**
+**Prompt Pirates — Building Intelligence. Securing Voices.**
