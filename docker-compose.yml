@@ -13,7 +13,10 @@ services:
       - CFIC_ENV=development
       - CFIC_API_KEY=${CFIC_API_KEY:-replace-me-for-local-testing}
       - CFIC_CLOUD_INFERENCE_URL=http://cloud-inference-orchestrator:8200
-      - CFIC_REQUEST_TIMEOUT_SECONDS=30.0
+      - CFIC_CLOUD_INFERENCE_TIMEOUT=60.0
+      - CFIC_REQUEST_TIMEOUT_SECONDS=60.0
+      - CFIC_USE_CLOUD_INFERENCE=true
+      - CFIC_ALLOW_LEGACY_FALLBACK=false
     depends_on:
       - cloud-inference-orchestrator
     networks:

@@ -13,7 +13,9 @@ class Settings(BaseSettings):
 
     # Cloud Inference Subsystem URL (internal orchestration)
     cloud_inference_url: str = "http://cloud-inference-orchestrator:8200"
-    cloud_inference_timeout: float = 30.0
+    cloud_inference_timeout: float = 60.0
+    use_cloud_inference: bool = True
+    allow_legacy_fallback: bool = False
 
     # Downstream legacy / fallback service URLs
     pella_base_url: str = "http://localhost:8101"
@@ -21,7 +23,7 @@ class Settings(BaseSettings):
     askdrip_llm_base_url: str = ""
     askdrip_llm_api_key: str = ""
     askdrip_llm_model: str = "askdrip-risk-v1"
-    request_timeout_seconds: float = 30.0
+    request_timeout_seconds: float = 60.0
 
     model_config = SettingsConfigDict(
         env_prefix="CFIC_",

@@ -63,8 +63,9 @@ class AnalysisOrchestrator:
         use_cloud = getattr(settings, "use_cloud_inference", True) and bool(self.cloud_client.base_url)
 
         if use_cloud:
+            chunk_responses: List[dict[str, Any]] = []
+            cloud_dispatch_error: str | None = None
             try:
-                chunk_responses: List[dict[str, Any]] = []
                 for chunk in chunks:
                     c_resp = await self.cloud_client.run_inference(
                         audio=chunk["audio_bytes"],
@@ -76,21 +77,65 @@ class AnalysisOrchestrator:
                         timestamp_end_s=chunk["end_seconds"],
                     )
                     chunk_responses.append(c_resp)
-
-                # If cloud client was reachable and responded with valid inference
-                first_status = chunk_responses[0].get("status") if chunk_responses else "error"
-                if first_status in ("success", "inconclusive"):
-                    return self._aggregate_cloud_responses(
-                        req_id=req_id,
-                        chunk_responses=chunk_responses,
-                        pipeline_start=pipeline_start,
-                    )
-                else:
-                    logger.warning(
-                        f"Cloud inference returned {first_status}; falling back to local/legacy pipeline."
-                    )
             except Exception as exc:
-                logger.warning(f"Cloud inference dispatch failed ({exc}); falling back to legacy pipeline.")
+                cloud_dispatch_error = f"Cloud inference dispatch failed: {type(exc).__name__}: {exc}"
+                logger.warning(cloud_dispatch_error)
+
+            # Evaluate cloud inference outcome
+            first_status = chunk_responses[0].get("status") if chunk_responses else "error"
+            is_cloud_success = (
+                bool(chunk_responses)
+                and not cloud_dispatch_error
+                and first_status in ("success", "inconclusive")
+            )
+
+            if is_cloud_success:
+                return self._aggregate_cloud_responses(
+                    req_id=req_id,
+                    chunk_responses=chunk_responses,
+                    pipeline_start=pipeline_start,
+                )
+
+            # Fallback check: only fall back to local/legacy pipeline if explicitly configured
+            allow_fallback = getattr(settings, "allow_legacy_fallback", False)
+            if allow_fallback:
+                logger.warning(
+                    f"Cloud inference returned {first_status}; falling back to local/legacy pipeline as configured."
+                )
+                return await self._run_legacy_pipeline(
+                    audio=audio,
+                    filename=filename,
+                    content_type=content_type,
+                    req_id=req_id,
+                    pipeline_start=pipeline_start,
+                )
+
+            # Safe mode-aware handling: In cloud mode without legacy fallback,
+            # return an explicit, correctly structured failure/inconclusive response
+            # without attempting dead localhost endpoints.
+            logger.warning(
+                f"Cloud inference returned {first_status} ({cloud_dispatch_error or 'upstream failure'}). "
+                "Legacy fallback is disabled in cloud mode; returning structured cloud verdict."
+            )
+
+            if not chunk_responses:
+                elapsed = round((time.perf_counter() - pipeline_start) * 1000, 2)
+                status_label = "timeout" if "timeout" in str(cloud_dispatch_error).lower() else "error"
+                chunk_responses = [{
+                    "status": status_label,
+                    "error": cloud_dispatch_error or "Cloud inference unavailable",
+                    "spoof": {"status": status_label, "prediction": None, "score": None, "latency_ms": elapsed},
+                    "transcription": {"status": status_label, "text": None, "language": None, "latency_ms": elapsed},
+                    "lid": {"status": status_label, "language": None},
+                    "rias": {"status": status_label, "risk_level": "INCONCLUSIVE", "failure_reason": cloud_dispatch_error, "latency_ms": elapsed},
+                    "latency_ms": elapsed,
+                }]
+
+            return self._aggregate_cloud_responses(
+                req_id=req_id,
+                chunk_responses=chunk_responses,
+                pipeline_start=pipeline_start,
+            )
 
         # 3. Fallback: Legacy Parallel Dispatch
         return await self._run_legacy_pipeline(
@@ -121,6 +166,8 @@ class AnalysisOrchestrator:
             t_obj = c.get("transcription", {})
             if t_obj.get("status") == "error":
                 transcription_status = "error"
+            elif t_obj.get("status") == "timeout" and transcription_status != "error":
+                transcription_status = "timeout"
             if t_obj.get("text"):
                 transcription_texts.append(t_obj["text"].strip())
             if t_obj.get("model_id"):
@@ -130,10 +177,17 @@ class AnalysisOrchestrator:
         aggregated_text = " ".join(transcription_texts).strip() or None
         latencies["transcription"] = round(transcription_latency, 2)
 
+        if aggregated_text:
+            final_transc_status = "success"
+        elif transcription_status in ("timeout", "error"):
+            final_transc_status = transcription_status
+        else:
+            final_transc_status = "error"
+
         transc_res = {
-            "status": transcription_status if aggregated_text or transcription_status == "success" else "error",
+            "status": final_transc_status,
             "text": aggregated_text,
-            "language": ordered_chunks[0].get("transcription", {}).get("language", "en"),
+            "language": ordered_chunks[0].get("transcription", {}).get("language", "en") if ordered_chunks else "en",
             "model_version": last_model_id,
             "latency_ms": latencies["transcription"],
         }
@@ -141,7 +195,7 @@ class AnalysisOrchestrator:
         # 2. Aggregate Spoof verdicts
         spoof_predictions = [c.get("spoof", {}).get("prediction") for c in ordered_chunks if c.get("spoof", {}).get("prediction")]
         spoof_scores = [c.get("spoof", {}).get("score") for c in ordered_chunks if c.get("spoof", {}).get("score") is not None]
-        spoof_statuses = [c.get("spoof", {}).get("status") for c in ordered_chunks]
+        spoof_statuses = [c.get("spoof", {}).get("status") for c in ordered_chunks if c.get("spoof", {}).get("status")]
         spoof_latency = sum(c.get("spoof", {}).get("latency_ms", 0.0) for c in ordered_chunks)
         latencies["pella"] = round(spoof_latency, 2)
 
@@ -155,18 +209,30 @@ class AnalysisOrchestrator:
             final_spoof_pred = None
             final_spoof_score = None
 
-        final_spoof_status = "success" if final_spoof_pred else ("error" if "error" in spoof_statuses else "inconclusive")
+        if final_spoof_pred:
+            final_spoof_status = "success"
+        elif "timeout" in spoof_statuses:
+            final_spoof_status = "timeout"
+        elif "error" in spoof_statuses:
+            final_spoof_status = "error"
+        else:
+            final_spoof_status = "inconclusive"
+
         pella_res = {
             "status": final_spoof_status,
             "prediction": final_spoof_pred,
             "score": final_spoof_score,
-            "model_version": ordered_chunks[0].get("spoof", {}).get("model_version", "vmc-south"),
+            "model_version": ordered_chunks[0].get("spoof", {}).get("model_version") if ordered_chunks else None,
             "latency_ms": latencies["pella"],
         }
 
         # 3. Aggregate RIAS semantic risk verdicts
-        rias_risks = [c.get("rias", {}).get("risk_level") for c in ordered_chunks if c.get("rias", {}).get("risk_level")]
-        rias_statuses = [c.get("rias", {}).get("status") for c in ordered_chunks]
+        rias_risks = [
+            c.get("rias", {}).get("risk_level")
+            for c in ordered_chunks
+            if c.get("rias", {}).get("risk_level") and str(c.get("rias", {}).get("risk_level")).upper() != "INCONCLUSIVE"
+        ]
+        rias_statuses = [c.get("rias", {}).get("status") for c in ordered_chunks if c.get("rias", {}).get("status")]
         rias_latency = sum(c.get("rias", {}).get("latency_ms", 0.0) for c in ordered_chunks)
         latencies["rias_llm"] = round(rias_latency, 2)
 
@@ -182,12 +248,23 @@ class AnalysisOrchestrator:
             final_rias_status = "success"
         else:
             final_risk = None
-            final_rias_status = "skipped" if all(s == "skipped" for s in rias_statuses) else "inconclusive"
+            if all(s == "skipped" for s in rias_statuses):
+                final_rias_status = "skipped"
+            elif "timeout" in rias_statuses:
+                final_rias_status = "timeout"
+            elif "error" in rias_statuses:
+                final_rias_status = "error"
+            else:
+                final_rias_status = "inconclusive"
+
+        failure_reason = None
+        if ordered_chunks:
+            failure_reason = ordered_chunks[0].get("rias", {}).get("failure_reason") or ordered_chunks[0].get("error")
 
         rias_res = {
             "status": final_rias_status,
             "risk_level": final_risk,
-            "reason": ordered_chunks[0].get("rias", {}).get("failure_reason"),
+            "reason": failure_reason,
             "latency_ms": latencies["rias_llm"],
         }
 
