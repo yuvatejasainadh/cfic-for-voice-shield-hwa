@@ -1,0 +1,31 @@
+# Virtual Environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Models and downloaded weights
+models/
+*.pt
+*.pth
+*.nemo
+*.bin
+*.onnx
+
+# Downloaded audio and data cache
+data/audio/
+data/cache/
+*.wav
+*.flac
+*.mp3
+
+# Outputs logs & temporary test files
+outputs/logs/*.log
+temp/
+tmp/
+.cache/

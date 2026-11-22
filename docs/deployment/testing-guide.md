@@ -80,9 +80,43 @@ python -m pytest tests/unit/test_tced.py -v -k "high_rias"
    - Missing/unavailable RIAS evidence on authentic audio -> `INCONCLUSIVE` (reason: `RIAS_EVIDENCE_UNAVAILABLE`).
    - Unrecognized RIAS risk level -> `INCONCLUSIVE` (reason: `INVALID_RIAS_RISK_LEVEL`, never defaults to `LOW`).
    - None, empty dictionaries, and malformed inputs handled safely without exceptions.
-3. **Gateway Protection:**
-   - Missing or invalid `X-API-Key` returns `401 Unauthorized`.
-   - Empty audio payload returns `400 Bad Request`.
-   - Payload exceeding 25 MiB returns `413 Payload Too Large`.
-   - Exceeding request rate limit returns `429 Too Many Requests` with `Retry-After`.
-   - Tracing header `X-Request-ID` is preserved or auto-generated.
+3. **Gateway Protection & Security Hardening:**
+   - Missing, empty, or invalid `X-API-Key` returns `401 Unauthorized` (`UNAUTHORIZED`) with constant-time verification.
+   - Empty audio payload returns `400 Bad Request` (`EMPTY_AUDIO_PAYLOAD`).
+   - Payload exceeding 25 MiB returns `413 Payload Too Large` (`AUDIO_PAYLOAD_TOO_LARGE`).
+   - Unsupported MIME types (e.g., `text/plain`) or file extensions (e.g., `.txt`, `.pdf`) return `415 Unsupported Media Type` (`UNSUPPORTED_AUDIO_FORMAT`).
+   - Corrupted or unparseable audio bitstreams return `400 Bad Request` (`CORRUPTED_AUDIO_PAYLOAD`).
+   - Audio files exceeding maximum duration (120s) return `400 Bad Request` (`AUDIO_DURATION_TOO_LONG`).
+   - Exceeding request rate limit returns `429 Too Many Requests` (`RATE_LIMIT_EXCEEDED`) with `Retry-After` header.
+   - Inactive rate limit clients are periodically pruned to prevent memory exhaustion under high-volume client rotation.
+   - Bounded concurrency and queue manager rejects overload with `503 Service Unavailable` (`SERVICE_OVERLOADED`) when queue is full.
+   - Queue wait timeouts abort with `504 Gateway Timeout` (`QUEUE_TIMEOUT`).
+   - Tracing header `X-Request-ID` is preserved in both response headers and payload body.
+
+---
+
+## 5. Postman Collection & Automated Validation
+
+The repository includes a comprehensive Postman test suite and environment in the `postman/` directory:
+- `postman/CFIC_VoiceShield_API_Gateway_Validation.postman_collection.json`
+- `postman/CFIC_VoiceShield_Local.postman_environment.json`
+
+### 5.1 Test Suite Organization (8 Functional Folders, 29 Requests, 63 Assertions)
+1. `1. Health and Discovery`: System health, versioned health, Swagger, and ReDoc discovery.
+2. `2. Authentication and Authorization`: Missing, invalid, empty, and valid API key scenarios.
+3. `3. Rate Limiting`: Normal quota, burst limit 429, and `Retry-After` validation.
+4. `4. Request Validation`: Empty (400), oversized (413), invalid MIME (415), corrupt audio (400), long audio (400).
+5. `5. Audio Chunking`: Short (<5s), 5s window boundary, and multi-chunk (10s) aggregation.
+6. `6. Concurrency and Bounded Queue`: Normal slot acquisition with `queue_wait` latency, queue saturation (503), queue timeout (504).
+7. `7. End-to-End Orchestration & TCED`: Complete decision engine policy verification (GENUINE, FAKE, SUSPICIOUS, INCONCLUSIVE).
+8. `8. Edge Cases & Resiliency`: Custom `X-Request-ID` echoing, special characters in filenames, binary octet-streams, rapid sequential calls.
+
+### 5.2 Running the Postman Validation Suite
+Execute the automated validator script:
+```bash
+python scripts/validate_postman_collection.py
+```
+This script audits:
+- Postman Collection v2.1.0 schema compliance and environment variable resolution.
+- Presence of all 8 functional folders and 63 automated `pm.test` assertions.
+- Live HTTP/ASGI execution verifying response status codes and body schemas.

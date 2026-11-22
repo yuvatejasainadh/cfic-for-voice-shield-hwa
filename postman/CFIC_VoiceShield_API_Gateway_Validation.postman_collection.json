@@ -1,0 +1,1534 @@
+{
+  "info": {
+    "_postman_id": "c8f49a12-6e21-42a1-9df1-801fcbf6c1e3",
+    "name": "CFIC VoiceShield API Gateway Validation",
+    "description": "Comprehensive API Gateway test suite for VoiceShield covering Authentication, Rate Limiting, Request Validation, 5-Second Window Chunking, Bounded Concurrency & Queueing, TCED Decision Policy, and Edge Case Resilience.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Health and Discovery",
+      "description": "Endpoints for load balancer probes, system health verification, and interactive API documentation.",
+      "item": [
+        {
+          "name": "GET System Root Health (/health)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": null,
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Root health probe used by container orchestrators and load balancers."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Health status is ok and service is cfic-api\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.status).to.eql(\"ok\");",
+                  "    pm.expect(data.service).to.eql(\"cfic-api\");",
+                  "    pm.expect(data.downstream_status).to.be.an(\"object\");",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Versioned Health (/v1/health)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": null,
+            "url": {
+              "raw": "{{base_url}}/v1/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "health"
+              ]
+            },
+            "description": "API v1 health status endpoint."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Versioned health confirms ok\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.status).to.eql(\"ok\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Swagger OpenAPI Docs (/docs)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": null,
+            "url": {
+              "raw": "{{base_url}}/docs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "docs"
+              ]
+            },
+            "description": "Interactive Swagger OpenAPI specification UI."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Content-Type is text/html\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/html\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET ReDoc Documentation (/redoc)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": null,
+            "url": {
+              "raw": "{{base_url}}/redoc",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "redoc"
+              ]
+            },
+            "description": "Alternative ReDoc documentation endpoint."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Content-Type is text/html\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/html\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Authentication and Authorization",
+      "description": "Verification of constant-time X-API-Key authentication, rejection of missing/invalid keys, and header preservation.",
+      "item": [
+        {
+          "name": "Missing API Key (401 Unauthorized)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{sample_audio_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Omission of X-API-Key header must return 401 UNAUTHORIZED."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"Error code is UNAUTHORIZED\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"UNAUTHORIZED\");",
+                  "    pm.expect(data.detail).to.include(\"API key\");",
+                  "});",
+                  "pm.test(\"X-Request-ID header is attached for tracing\", function () {",
+                  "    pm.expect(pm.response.headers.has(\"X-Request-ID\")).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid API Key (401 Unauthorized)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{invalid_api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{sample_audio_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Invalid X-API-Key header must be rejected in constant time."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"Error code is UNAUTHORIZED\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"UNAUTHORIZED\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Empty API Key (401 Unauthorized)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{sample_audio_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Empty string API key must be rejected with 401."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"Error code is UNAUTHORIZED\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"UNAUTHORIZED\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Valid API Key Authentication Accepted",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{sample_audio_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Valid X-API-Key passes authentication gate."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Authentication succeeds and returns analysis response\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data).to.have.property(\"request_id\");",
+                  "    pm.expect(data).to.have.property(\"final_outcome\");",
+                  "    pm.expect(data).to.have.property(\"reason_code\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Rate Limiting",
+      "description": "Sliding-window rate limiter enforcement per client IP + key fingerprint, Retry-After header delivery, and stale memory eviction.",
+      "item": [
+        {
+          "name": "Request Within Normal Rate Limit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{sample_audio_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Single request under rate limit window succeeds."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response has valid request_id\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.request_id).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Burst Limit Exceeded (429 Rate Limit Exceeded)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{sample_audio_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Simulates burst rate limit exceeding window quota, expecting 429 and Retry-After header."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 429 Too Many Requests\", function () {",
+                  "    pm.response.to.have.status(429);",
+                  "});",
+                  "pm.test(\"Error code is RATE_LIMIT_EXCEEDED\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"RATE_LIMIT_EXCEEDED\");",
+                  "});",
+                  "pm.test(\"Retry-After header is present and integer\", function () {",
+                  "    pm.expect(pm.response.headers.has(\"Retry-After\")).to.be.true;",
+                  "    const retryAfter = parseInt(pm.response.headers.get(\"Retry-After\"), 10);",
+                  "    pm.expect(retryAfter).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Request Validation",
+      "description": "Strict validation of audio MIME types, file extensions, payload size bounds (25MB), decodability, and duration cap (120s).",
+      "item": [
+        {
+          "name": "Empty Audio Payload (400 Bad Request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Submitting an empty 0-byte file must return 400 Bad Request."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Error code is EMPTY_AUDIO_PAYLOAD\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"EMPTY_AUDIO_PAYLOAD\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Oversized Audio Payload (>25MB, 413 Payload Too Large)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_oversized.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Audio payload exceeding max_audio_bytes (25MB) must be rejected with 413."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 413 Payload Too Large\", function () {",
+                  "    pm.response.to.have.status(413);",
+                  "});",
+                  "pm.test(\"Error code is AUDIO_PAYLOAD_TOO_LARGE\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"AUDIO_PAYLOAD_TOO_LARGE\");",
+                  "    pm.expect(data.extra).to.have.property(\"max_bytes\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid MIME Type (text/plain, 415 Unsupported Media Type)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/test.txt",
+                  "contentType": "text/plain"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Non-audio MIME types must be rejected with 415."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 415 Unsupported Media Type\", function () {",
+                  "    pm.response.to.have.status(415);",
+                  "});",
+                  "pm.test(\"Error code is UNSUPPORTED_AUDIO_FORMAT\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"UNSUPPORTED_AUDIO_FORMAT\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Corrupted Audio Bitstream (400 Bad Request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/corrupt.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Uploaded file with valid extension/MIME but corrupted header/bitstream returns 400."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Error code is CORRUPTED_AUDIO_PAYLOAD\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"CORRUPTED_AUDIO_PAYLOAD\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Audio Exceeding Duration Cap (>120s, 400 Bad Request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/too_long.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Audio duration longer than 120 seconds must be rejected with 400."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Error code is AUDIO_DURATION_TOO_LONG\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"AUDIO_DURATION_TOO_LONG\");",
+                  "    pm.expect(data.extra).to.have.property(\"max_duration_seconds\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Audio Chunking",
+      "description": "Sequential 5-second window chunking orchestration ensuring sample conservation across various file durations.",
+      "item": [
+        {
+          "name": "Short Audio Sample (<5s, 1s Single Chunk)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Audio shorter than 5 seconds processed as single chunk without padding distortion."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Processed as single chunk with valid schema\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.final_outcome).to.be.oneOf([\"GENUINE\", \"FAKE\", \"SUSPICIOUS\", \"INCONCLUSIVE\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Standard 5s Sample (Exact Chunk Boundary)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_5s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Exact 5.0-second audio sample processed cleanly at window boundary."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response contains latency metrics\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.latency_ms).to.have.property(\"total\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Multi-Chunk 10s Sample (2 Sequential Chunks)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_10s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "10-second sample sliced into two 5-second chunks and aggregated."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Orchestrated across sequential chunks\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.pella_status).to.be.a(\"string\");",
+                  "    pm.expect(data.rias_transcription_status).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Concurrency and Bounded Queue",
+      "description": "Verification of max concurrent inference slots, bounded queue capacity, queue latency reporting, and 503/504 backpressure.",
+      "item": [
+        {
+          "name": "Normal Concurrency Slot Acquisition",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Acquires concurrency slot and reports queue_wait latency in milliseconds."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Latency breakdown includes queue_wait metric\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.latency_ms).to.have.property(\"queue_wait\");",
+                  "    pm.expect(data.latency_ms.queue_wait).to.be.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Queue Capacity Saturation (503 Service Overloaded)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "When waiting queue capacity is exceeded, returns 503 SERVICE_OVERLOADED with Retry-After."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 503 Service Unavailable\", function () {",
+                  "    pm.response.to.have.status(503);",
+                  "});",
+                  "pm.test(\"Error code is SERVICE_OVERLOADED\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"SERVICE_OVERLOADED\");",
+                  "});",
+                  "pm.test(\"Retry-After header provided\", function () {",
+                  "    pm.expect(pm.response.headers.has(\"Retry-After\")).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Queue Timeout (504 Gateway Timeout)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "When request wait in queue exceeds queue_timeout_seconds, returns 504 QUEUE_TIMEOUT."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 504 Gateway Timeout\", function () {",
+                  "    pm.response.to.have.status(504);",
+                  "});",
+                  "pm.test(\"Error code is QUEUE_TIMEOUT\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.error_code).to.eql(\"QUEUE_TIMEOUT\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. End-to-End Orchestration & TCED",
+      "description": "Authoritative 15-combination TCED decision matrix synthesis across acoustic and conversational evidence.",
+      "item": [
+        {
+          "name": "TCED Genuine Voice Confirmed (GENUINE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Acoustic GENUINE + RIAS LOW yields final outcome GENUINE."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Final outcome is GENUINE\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.final_outcome).to.eql(\"GENUINE\");",
+                  "    pm.expect(data.reason_code).to.eql(\"ACOUSTIC_GENUINE_CONFIRMED\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TCED Acoustic Spoof Detected (FAKE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Acoustic FAKE yields final outcome FAKE."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Final outcome is FAKE\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.final_outcome).to.eql(\"FAKE\");",
+                  "    pm.expect(data.reason_code).to.eql(\"ACOUSTIC_SPOOF_DETECTED\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TCED High Semantic Risk Override (SUSPICIOUS)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Acoustic GENUINE overridden by RIAS HIGH into SUSPICIOUS."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Final outcome is SUSPICIOUS due to HIGH RIAS override\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.final_outcome).to.eql(\"SUSPICIOUS\");",
+                  "    pm.expect(data.reason_code).to.eql(\"HIGH_RIAS_OVERRIDE\");",
+                  "    pm.expect(data.rias_risk_level).to.eql(\"HIGH\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TCED Partial Evidence Insufficient (INCONCLUSIVE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Acoustic UNAVAILABLE + RIAS LOW yields INCONCLUSIVE."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Final outcome is INCONCLUSIVE when evidence is insufficient\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.final_outcome).to.eql(\"INCONCLUSIVE\");",
+                  "    pm.expect(data.reason_code).to.eql(\"INSUFFICIENT_EVIDENCE\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "8. Edge Cases & Resiliency",
+      "description": "Edge cases including custom request ID header tracing, special characters in filenames, binary MIME streams, and latency consistency.",
+      "item": [
+        {
+          "name": "Custom X-Request-ID Header Echoed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{request_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Client-provided X-Request-ID must be echoed in header and response body."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Echoes custom X-Request-ID in response header\", function () {",
+                  "    const expected = pm.environment.get(\"request_id\") || \"custom-trace-uuid-12345\";",
+                  "    pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.eql(expected);",
+                  "});",
+                  "pm.test(\"Response body request_id matches custom ID\", function () {",
+                  "    const data = pm.response.json();",
+                  "    const expected = pm.environment.get(\"request_id\") || \"custom-trace-uuid-12345\";",
+                  "    pm.expect(data.request_id).to.eql(expected);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Special Characters in Audio Filename",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Filenames with spaces, hashes, brackets must be handled safely."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Processed safely without escaping bugs\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.request_id).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Application/Octet-Stream MIME with .wav Extension",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav",
+                  "contentType": "application/octet-stream"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Binary octet-stream upload with supported audio extension is accepted."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Successfully decoded binary stream\", function () {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.final_outcome).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rapid Sequential Requests Latency Stability",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "storage/audio/sample_1s.wav"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "analyze"
+              ]
+            },
+            "description": "Verifies Gateway stability and latency under sequential invocations."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Total latency is acceptable\", function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

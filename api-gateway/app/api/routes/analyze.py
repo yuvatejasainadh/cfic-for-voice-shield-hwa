@@ -2,16 +2,14 @@
 
 import uuid
 from fastapi import APIRouter, Depends, File, Header, Request, UploadFile
+from app.core.concurrency import concurrency_manager
 from app.core.config import settings
-from app.core.errors import (
-    AudioPayloadTooLargeException,
-    EmptyAudioPayloadException,
-    RateLimitExceededException,
-    UnauthorizedException,
-)
+from app.core.errors import RateLimitExceededException, UnauthorizedException
 from app.core.rate_limiter import InMemoryRateLimiter
+from app.core.security import get_api_key_fingerprint, validate_api_key
 from app.orchestration.analysis_orchestrator import analyze_audio
 from app.schemas.analysis import AnalysisResponse
+from app.services.audio_service import audio_service
 
 router = APIRouter()
 
@@ -34,14 +32,15 @@ async def verify_api_key_and_rate_limit(
     request: Request,
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> None:
-    """Validate API key authentication and enforce rate limits."""
-    # 1. API Key Authentication
-    if not x_api_key or x_api_key != settings.api_key:
+    """Validate API key authentication (constant-time) and enforce sliding-window rate limits."""
+    # 1. API Key Authentication (constant-time comparison)
+    if not validate_api_key(x_api_key):
         raise UnauthorizedException("Missing or invalid API key provided in X-API-Key header")
 
-    # 2. Rate Limiting Key: Use client IP combined with API key hash
+    # 2. Rate Limiting Key: Use client IP combined with SHA-256 API key fingerprint
     client_ip = request.client.host if request.client else "unknown"
-    rate_key = f"{client_ip}:{x_api_key[-6:]}"
+    key_fingerprint = get_api_key_fingerprint(x_api_key)
+    rate_key = f"{client_ip}:{key_fingerprint}"
 
     allowed, remaining, retry_after = rate_limiter.check(rate_key)
     if not allowed:
@@ -63,28 +62,29 @@ async def analyze(
     req_id = get_request_id(request)
 
     content = await file.read()
-
-    # Request Validation: empty payload
-    if not content:
-        raise EmptyAudioPayloadException("Received empty audio payload (0 bytes)")
-
-    # Request Validation: size limit
-    if len(content) > settings.max_audio_bytes:
-        raise AudioPayloadTooLargeException(
-            max_bytes=settings.max_audio_bytes, actual_bytes=len(content)
-        )
-
     filename = file.filename or "audio.wav"
     content_type = file.content_type or "audio/wav"
+
+    # Audio Validation: MIME type, file extension, payload size, decodability, duration cap
+    audio_service.validate_audio_payload(
+        content=content,
+        filename=filename,
+        content_type=content_type,
+    )
 
     import app.api.routes as routes_module
     analyze_fn = getattr(routes_module, "analyze_audio", analyze_audio)
 
-    response = await analyze_fn(
-        audio=content,
-        filename=filename,
-        content_type=content_type,
-        request_id=req_id,
-    )
+    # Bounded Concurrency & Queue Management
+    async with concurrency_manager.acquire_slot() as queue_wait_ms:
+        response = await analyze_fn(
+            audio=content,
+            filename=filename,
+            content_type=content_type,
+            request_id=req_id,
+        )
 
-    return response
+        if response.latency_ms is not None:
+            response.latency_ms["queue_wait"] = queue_wait_ms
+
+        return response

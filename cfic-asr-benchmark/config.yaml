@@ -1,0 +1,51 @@
+# CFIC x VoiceShield ASR Benchmark Configuration
+
+system:
+  device: "cpu" # Intel Iris Xe / CPU (No CUDA GPU)
+  random_seed: 42
+
+dataset:
+  name: "vdivyasharma/IndicSynth"
+  license: "CC BY-NC 4.0"
+  initial_language: "Telugu"
+  additional_languages:
+    - "Tamil"
+    - "Kannada"
+    - "Malayalam"
+  sample_size: 100
+  smoke_test_size: 20
+
+chunking:
+  window_seconds: 5.0
+  overlap_seconds: 0.5
+
+models:
+  whisper_small:
+    type: "whisper"
+    model_name: "small"
+    language_code: "te"
+    task: "transcribe"
+  whisper_turbo:
+    type: "whisper"
+    model_name: "large-v3-turbo"
+    language_code: "te"
+    task: "transcribe"
+  indicconformer_telugu:
+    type: "indicconformer"
+    model_name: "indicconformer_stt_te_hybrid_rnnt_large"
+    checkpoint_url: "https://objectstore.e2enetworks.net/indicconformer/models/indicconformer_stt_te_hybrid_rnnt_large.nemo"
+    local_path: "models/indicconformer_stt_te_hybrid_rnnt_large.nemo"
+    language_code: "te"
+  indicconformer_multilingual:
+    type: "indicconformer"
+    model_name: "indicconformer_stt_multi_hybrid_rnnt_600m"
+    checkpoint_url: "https://objectstore.e2enetworks.net/indicconformer/models/indicconformer_stt_multi_hybrid_rnnt_600m.nemo"
+    local_path: "models/indicconformer_stt_multi_hybrid_rnnt_600m.nemo"
+    language_code: "te"
+
+paths:
+  manifest: "data/manifest.jsonl"
+  audio_dir: "data/audio"
+  results_dir: "outputs/results"
+  reports_dir: "outputs/reports"
+  logs_dir: "outputs/logs"

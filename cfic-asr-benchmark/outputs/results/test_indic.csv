@@ -1,0 +1,2 @@
+sample_id,language,model_name,reference,prediction,audio_duration_seconds,inference_seconds,real_time_factor,success,error
+telugu_00000,Telugu,indicconformer_te_large,సి కెమికల్ ఇంజనీరింగ్ లో పి హెచ్ డి లను డా,సి కెమికల్ ఇంజనీరింగ్ లో పి హెచ్ డి నను బ్యా,5.472,1.35,0.2467,True,

@@ -1,0 +1,14 @@
+eval_set,model_name,total_samples,success_rate_percent,corpus_wer,corpus_cer,mean_clip_wer,mean_clip_cer,mean_latency_seconds,median_latency_seconds,p95_latency_seconds,corpus_rtf,total_audio_duration_seconds,total_inference_seconds,model_init_seconds,peak_ram_mb
+"IndicConformer Full (100 samples, Whole Audio)",indicconformer_te_large,100,100.0,0.2527,0.0559,0.2534,0.0557,0.8932,0.8244,1.4345,0.1032,865.61,89.32,12.03,1640.0
+"IndicConformer (20 samples, Whole Audio)",indicconformer_te_large,20,100.0,0.218,0.0591,0.2212,0.0542,0.5757,0.5086,1.1474,0.0681,169.15,11.51,12.03,1640.0
+"IndicConformer (20 samples, 5s No-Overlap Chunks)",indicconformer_te_large_5s_no_overlap,20,100.0,0.3981,0.1511,0.4125,0.1536,0.6528,0.5864,1.0861,0.0772,169.15,13.06,12.03,1640.0
+"IndicConformer (20 samples, 5s Overlap Reconciled)",indicconformer_te_large_5s_with_overlap,20,100.0,0.455,0.2011,0.4656,0.1989,0.6951,0.6142,1.1722,0.0822,169.15,13.9,12.03,1640.0
+Matched 5-Sample (Whole Audio),indicconformer_te_large,5,100.0,0.2083,0.0414,0.2044,0.0441,0.6025,0.5465,1.1285,0.0802,37.58,3.01,12.03,1640.0
+Matched 5-Sample (Whole Audio),whisper_small,5,100.0,1.2083,1.3923,1.25,1.5625,11.9408,11.8918,13.2235,1.5888,37.58,59.7,2.72,2100.0
+Matched 5-Sample (Whole Audio),whisper_large-v3-turbo,5,100.0,0.8333,0.2155,0.8406,0.2362,21.9292,21.9485,23.7722,2.9178,37.58,109.65,12.8,4890.0
+Matched 5-Sample (5s No Overlap),indicconformer_te_large,5,100.0,0.4167,0.1133,0.4056,0.1233,0.5414,0.4558,0.844,0.072,37.58,2.71,12.03,1640.0
+Matched 5-Sample (5s No Overlap),whisper_small,5,100.0,1.0,3.2348,1.0,3.5024,28.4767,24.7927,44.1988,3.7889,37.58,142.38,2.72,2100.0
+Matched 5-Sample (5s No Overlap),whisper_large-v3-turbo,5,100.0,0.9167,1.616,0.9222,1.839,48.5646,46.4477,64.4923,6.4617,37.58,242.82,12.8,4890.0
+Matched 5-Sample (5s With Overlap),indicconformer_te_large,5,100.0,0.4583,0.2127,0.4567,0.2106,0.5843,0.4925,0.9413,0.0777,37.58,2.92,12.03,1640.0
+Matched 5-Sample (5s With Overlap),whisper_small,5,100.0,1.0,2.895,1.0,3.244,28.1249,24.5891,44.22,3.7421,37.58,140.62,2.72,2100.0
+Matched 5-Sample (5s With Overlap),whisper_large-v3-turbo,5,100.0,0.8958,1.6409,0.9056,1.8583,47.8559,44.3952,62.1712,6.3674,37.58,239.28,12.8,4890.0

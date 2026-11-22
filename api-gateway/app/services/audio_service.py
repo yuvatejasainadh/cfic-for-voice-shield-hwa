@@ -6,7 +6,13 @@ import uuid
 from typing import Any, BinaryIO, List
 from fastapi import UploadFile
 from app.core.config import settings
-from app.core.errors import AudioPayloadTooLargeException, EmptyAudioPayloadException
+from app.core.errors import (
+    AudioDurationTooLongException,
+    AudioPayloadTooLargeException,
+    CorruptedAudioPayloadException,
+    EmptyAudioPayloadException,
+    UnsupportedAudioFormatException,
+)
 
 ALLOWED_MIME_TYPES = {
     "audio/wav",
@@ -19,13 +25,28 @@ ALLOWED_MIME_TYPES = {
     "application/octet-stream",
 }
 
+ALLOWED_EXTENSIONS = {
+    ".wav",
+    ".mp3",
+    ".ogg",
+    ".flac",
+}
+
 
 class AudioService:
     """Manages audio payload validation, temporary storage, and chunking orchestration."""
 
     def __init__(self, max_bytes: int | None = None, storage_dir: str = "storage/audio"):
-        self.max_bytes = max_bytes if max_bytes is not None else settings.max_audio_bytes
+        self._max_bytes = max_bytes
         self.storage_dir = storage_dir
+
+    @property
+    def max_bytes(self) -> int:
+        return self._max_bytes if self._max_bytes is not None else settings.max_audio_bytes
+
+    @max_bytes.setter
+    def max_bytes(self, value: int | None) -> None:
+        self._max_bytes = value
 
     async def validate_upload(self, file: UploadFile) -> bytes:
         """Read and validate uploaded audio file.
@@ -49,6 +70,108 @@ class AudioService:
             )
 
         return content
+
+    def validate_audio_payload(
+        self,
+        content: bytes,
+        filename: str = "audio.wav",
+        content_type: str = "audio/wav",
+    ) -> dict[str, Any]:
+        """Validate audio payload MIME type, file extension, size limits, decodability, and duration cap.
+
+        Raises:
+            EmptyAudioPayloadException (400) if content is empty.
+            AudioPayloadTooLargeException (413) if content exceeds max_audio_bytes.
+            UnsupportedAudioFormatException (415) if MIME type or extension is unsupported.
+            CorruptedAudioPayloadException (400) if audio bitstream cannot be decoded or has 0 duration.
+            AudioDurationTooLongException (400) if audio duration exceeds max_audio_duration_seconds.
+
+        Returns a dictionary with parsed audio metadata:
+            duration_seconds, sample_rate, channels, size_bytes, mime_type, filename.
+        """
+        # 1. Empty payload check
+        if not content:
+            raise EmptyAudioPayloadException("Received empty audio payload (0 bytes)")
+
+        # 2. Size limit check
+        actual_size = len(content)
+        if actual_size > self.max_bytes:
+            raise AudioPayloadTooLargeException(
+                max_bytes=self.max_bytes,
+                actual_bytes=actual_size,
+            )
+
+        # 3. MIME type & extension checks
+        clean_mime = (content_type or "").split(";")[0].strip().lower()
+        ext = os.path.splitext(filename or "")[1].lower()
+
+        if clean_mime not in ALLOWED_MIME_TYPES:
+            raise UnsupportedAudioFormatException(
+                f"Unsupported audio MIME type: '{clean_mime}'. Allowed: audio/wav, audio/mpeg, audio/ogg, audio/flac."
+            )
+
+        if ext and ext not in ALLOWED_EXTENSIONS:
+            raise UnsupportedAudioFormatException(
+                f"Unsupported audio file extension: '{ext}'. Allowed: .wav, .mp3, .ogg, .flac."
+            )
+
+        if clean_mime == "application/octet-stream" and ext not in ALLOWED_EXTENSIONS:
+            raise UnsupportedAudioFormatException(
+                "Binary payload (application/octet-stream) requires a supported audio file extension (.wav, .mp3, .ogg, .flac)."
+            )
+
+        # 4. Decodability & duration checks
+        duration: float | None = None
+        sample_rate: int | None = None
+        channels: int | None = None
+
+        # Fast header metadata inspect via soundfile
+        try:
+            import soundfile as sf
+            with io.BytesIO(content) as bio:
+                info = sf.info(bio)
+                duration = float(info.duration)
+                sample_rate = int(info.samplerate)
+                channels = int(info.channels)
+        except Exception:
+            # Fallback to standard library wave module
+            try:
+                import wave
+                with io.BytesIO(content) as bio:
+                    with wave.open(bio, "rb") as wf:
+                        sr = wf.getframerate()
+                        frames = wf.getnframes()
+                        channels = wf.getnchannels()
+                        duration = float(frames / sr) if sr > 0 else 0.0
+                        sample_rate = sr
+            except Exception:
+                duration = None
+
+        if duration is None:
+            raise CorruptedAudioPayloadException(
+                "Audio payload is corrupted or contains unparseable bitstream"
+            )
+
+        if duration <= 0:
+            raise CorruptedAudioPayloadException(
+                "Audio stream contains zero duration or no audio samples"
+            )
+
+        max_duration = getattr(settings, "max_audio_duration_seconds", 120.0)
+        if duration > max_duration:
+            raise AudioDurationTooLongException(
+                max_duration_s=max_duration,
+                actual_duration_s=duration,
+            )
+
+        return {
+            "duration_seconds": round(duration, 3),
+            "sample_rate": sample_rate,
+            "channels": channels,
+            "size_bytes": actual_size,
+            "mime_type": clean_mime,
+            "filename": filename,
+        }
 
     def store_audio_temporarily(self, audio_bytes: bytes, filename: str | None = None) -> str:
         """Save audio to a managed storage location for job processing."""
